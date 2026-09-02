@@ -23,6 +23,10 @@ The screenshots are committed under `docs/screenshots/` so they render offline i
 
 ## Quick start
 
+### Prerequisites
+
+For a normal checkout, install Go 1.23.4+ and Node.js/npm. The repository does not require Java, a GPU, a CDN, or an external runtime service for the control plane. If Go or npm is unavailable, the bootstrap script installs pinned local tools under `.tools/` and does not modify your system PATH permanently.
+
 ```bash
 ./tools/bootstrap-toolchain.sh
 PATH="$(pwd)/.tools/bin:$PATH"
@@ -37,6 +41,8 @@ Setup checklist:
 2. Start the Go server with `go run ./cmd/infograf`.
 3. Open the URL printed by the server.
 4. Go to **Dashboards & Configure** to set the datastore, inspect connectors, and save a view.
+
+Stop the server with `Ctrl-C`. The default database is created at `data/infograf.db`; that path is ignored by source control.
 
 ```bash
 INFOGRAF_ADDR=127.0.0.1:18080 INFOGRAF_DB_PATH=/tmp/infograf-review.db go run ./cmd/infograf
@@ -78,6 +84,30 @@ JSON
 ```
 
 For file-based sources, read the file into `payload` and set `kind` to `csv` or `xlsx`. For Prometheus and OTLP, forward the exporter response body unchanged. The adapter boundary does not require a database or a scene-specific schema.
+
+File connection recipe (requires `jq`):
+
+```bash
+jq -n --rawfile payload metrics.csv \
+  '{kind:"csv",source_ref:"csv-upload",payload:$payload}' \
+  | curl -X POST http://127.0.0.1:8080/api/v1/sources/adapt \
+      -H 'Content-Type: application/json' --data-binary @-
+```
+
+For an XLSX upload, extract the selected worksheet to CSV at the upload boundary, then send the same request with `kind:"xlsx"`. This keeps workbook parsing replaceable without coupling scenes to a spreadsheet library.
+
+Prometheus and OTLP recipe:
+
+```bash
+curl -sS http://prometheus.example/api/v1/label/__name__/values
+payload=$(curl -sS http://exporter.example/metrics)
+curl -X POST http://127.0.0.1:8080/api/v1/sources/adapt \
+  -H 'Content-Type: application/json' \
+  --data "$(jq -n --arg payload "$payload" \
+    '{kind:"prometheus",source_ref:"exporter-prod",payload:$payload}')"
+```
+
+The same pattern works for OTLP JSON by changing `kind` to `opentelemetry` and using the OTLP JSON response as `payload`.
 
 Supported kinds:
 
@@ -127,6 +157,17 @@ Environment variables:
 - `INFOGRAF_DATA_DIR` — SQLite directory; default `data`.
 - `INFOGRAF_DB_PATH` — explicit SQLite file path.
 - `INFOGRAF_GRAPHITE_URL` — Graphite web host.
+
+The configuration API is also available directly:
+
+```bash
+curl http://127.0.0.1:8080/api/v1/config
+curl -X PUT http://127.0.0.1:8080/api/v1/config \
+  -H 'Content-Type: application/json' \
+  -d '{"product_name":"Infografics","workspace_name":"Operations","theme":"dark","storage":{"backend":"sqlite","path":"data/infograf.db","retention_days":30,"wal":true}}'
+```
+
+Only SQLite is currently implemented as a datastore backend. The backend field is explicit so a future PostgreSQL or object-store implementation can be added without changing scene documents or source adapters.
 
 ## Adding custom animation artwork
 
