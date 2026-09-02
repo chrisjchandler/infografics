@@ -29,9 +29,9 @@ type graphiteScenePreset struct {
 }
 
 var graphiteScenePresets = []graphiteScenePreset{
-	{Key: "sisyphus", Label: "Sisyphus", Description: "A climber and boulder follow the metric curve. Time is X. Value is Y.", MetricSlots: 1},
-	{Key: "icarus", Label: "Icarus", Description: "A flyer rides altitude from the metric value and panics on sharp descents.", MetricSlots: 1},
-	{Key: "cerberus", Label: "Cerberus", Description: "Three heads guard three metrics at once for multi-dimensional monitoring.", MetricSlots: 3},
+	{Key: "sisyphus", Label: "Sisyphus", Description: "A climber and boulder follow the metric curve. Time is X. Value is Y.", MetricSlots: 6},
+	{Key: "icarus", Label: "Icarus", Description: "A flyer rides altitude from the metric value and panics on sharp descents.", MetricSlots: 6},
+	{Key: "cerberus", Label: "Cerberus", Description: "Three heads guard selected metrics while the graph gallery compares the full overlay set.", MetricSlots: 6},
 }
 
 func (s *Server) handleGraphiteCatalog(w http.ResponseWriter, r *http.Request) {
@@ -87,15 +87,26 @@ func graphiteScene(ctx context.Context, preset graphiteScenePreset, period graph
 	specs := metricOptionsToSpecs(selected, availableMetrics)
 
 	seriesByMetric, err := fetchGraphiteSeries(ctx, sourceURL, specs, period.Window)
-	if err != nil {
-		return model.GraphiteSceneResponse{}, err
+	connected := err == nil
+	sourceLabel := "live Graphite"
+	if err != nil || graphiteSeriesSetIncomplete(seriesByMetric, specs) {
+		seriesByMetric = fallbackGraphiteSeries(specs)
+		sourceLabel = "deterministic Graphite fixture"
+		connected = false
 	}
 
 	canonicalSeries := make([]model.CanonicalSeries, 0, len(specs)+1)
+	fallbackSeries := fallbackGraphiteSeries(specs)
 	for _, spec := range specs {
 		series := graphiteSeriesToCanonical(spec, seriesByMetric[spec.Metric], sourceURL)
 		if len(series.Points) == 0 {
-			return model.GraphiteSceneResponse{}, fmt.Errorf("metric %q returned no datapoints in %s", spec.Metric, period.Window)
+			// Graphite can return HTTP 200 with an empty target alongside valid
+			// targets. The scene contract requires every selected metric to be
+			// replayable, so repair that individual series from the deterministic
+			// fixture instead of surfacing a transport error in the stage.
+			series = graphiteSeriesToCanonical(spec, fallbackSeries[spec.Metric], sourceURL)
+			connected = false
+			sourceLabel = "deterministic Graphite fixture (partial source)"
 		}
 		canonicalSeries = append(canonicalSeries, series)
 	}
@@ -124,9 +135,9 @@ func graphiteScene(ctx context.Context, preset graphiteScenePreset, period graph
 	}
 
 	return model.GraphiteSceneResponse{
-		Connected:        true,
+		Connected:        connected,
 		SourceURL:        sourceURL,
-		SourceLabel:      "live Graphite",
+		SourceLabel:      sourceLabel,
 		Period:           period.Key,
 		PeriodLabel:      period.Label,
 		Window:           period.Window,
@@ -144,8 +155,37 @@ func graphiteScene(ctx context.Context, preset graphiteScenePreset, period graph
 	}, nil
 }
 
+func graphiteSeriesSetIncomplete(series map[string]graphiteSeries, specs []graphiteMetricSpec) bool {
+	for _, spec := range specs {
+		if len(series[spec.Metric].Datapoints) == 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func fallbackGraphiteSeries(specs []graphiteMetricSpec) map[string]graphiteSeries {
+	base := time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC)
+	profiles := [][]float64{
+		{18, 24, 37, 71, 83, 62, 44, 29, 21},
+		{72, 70, 65, 51, 34, 48, 61, 69, 74},
+		{2, 3, 5, 13, 29, 18, 9, 4, 2},
+	}
+	out := make(map[string]graphiteSeries, len(specs))
+	for specIndex, spec := range specs {
+		profile := profiles[specIndex%len(profiles)]
+		datapoints := make([][]any, 0, len(profile))
+		for pointIndex, value := range profile {
+			ts := base.Add(time.Duration(pointIndex) * 15 * time.Minute).Unix()
+			datapoints = append(datapoints, []any{value, float64(ts)})
+		}
+		out[spec.Metric] = graphiteSeries{Target: spec.Metric, Datapoints: datapoints}
+	}
+	return out
+}
+
 func selectedGraphiteMetrics(r *http.Request) []string {
-	keys := []string{"metric", "metric_b", "metric_c"}
+	keys := []string{"metric", "metric_b", "metric_c", "metric_d", "metric_e", "metric_f"}
 	out := make([]string, 0, len(keys))
 	for _, key := range keys {
 		if value := strings.TrimSpace(r.URL.Query().Get(key)); value != "" {
@@ -180,10 +220,12 @@ func graphiteScenePresetOptions() []model.ScenePresetOption {
 func connectorOptions() []model.SourceConnectorOption {
 	return []model.SourceConnectorOption{
 		{Key: "graphite", Label: "Graphite", Status: "available", Description: "Live render and metric discovery are wired today."},
-		{Key: "prometheus", Label: "Prometheus", Status: "planned", Description: "Planned source adapter through the same canonical series path."},
-		{Key: "csv", Label: "CSV / XLSX", Status: "planned", Description: "Planned upload-driven ingestion for beginner workflows."},
-		{Key: "otel", Label: "OpenTelemetry", Status: "planned", Description: "Planned telemetry adapter for traces, metrics, and events."},
-		{Key: "rest", Label: "REST / JSON", Status: "planned", Description: "Planned generic pull adapter for API-driven datasets."},
+		{Key: "prometheus", Label: "Prometheus", Status: "available", Description: "Text exposition is normalized into canonical timestamped series."},
+		{Key: "csv", Label: "CSV", Status: "available", Description: "RFC4180 uploads with metric, value, and timestamp columns."},
+		{Key: "xlsx", Label: "XLSX worksheet", Status: "available", Description: "Worksheet-shaped CSV bytes share the CSV canonical contract."},
+		{Key: "opentelemetry", Label: "OpenTelemetry", Status: "available", Description: "OTLP JSON gauges, sums, histograms, and data points."},
+		{Key: "rest", Label: "REST / JSON", Status: "available", Description: "Nested metric/name + value API payloads map to canonical series."},
+		{Key: "plaintext", Label: "Raw plaintext", Status: "available", Description: "metric value timestamp lines for simple probes and scripts."},
 	}
 }
 
@@ -399,9 +441,19 @@ func timelineProgressSeries(primary model.CanonicalSeries, sourceURL string) mod
 	points := make([]model.CanonicalPoint, 0, len(primary.Points))
 	if len(primary.Points) == 1 {
 		points = append(points, model.CanonicalPoint{Timestamp: primary.Points[0].Timestamp, Value: 100})
-	} else {
+	} else if len(primary.Points) > 1 {
+		start := primary.Points[0].Timestamp
+		end := primary.Points[len(primary.Points)-1].Timestamp
+		span := end.Sub(start).Seconds()
 		for idx, point := range primary.Points {
-			progress := float64(idx) / float64(len(primary.Points)-1) * 100
+			progress := 0.0
+			if span > 0 {
+				progress = point.Timestamp.Sub(start).Seconds() / span * 100
+			} else {
+				// Invalid or unordered timestamps still produce deterministic output;
+				// upstream validation can report the malformed series.
+				progress = float64(idx) / float64(len(primary.Points)-1) * 100
+			}
 			points = append(points, model.CanonicalPoint{Timestamp: point.Timestamp, Value: progress})
 		}
 	}

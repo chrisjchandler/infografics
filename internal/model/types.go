@@ -21,8 +21,19 @@ type AppConfig struct {
 	ProductName   string    `json:"product_name"`
 	WorkspaceName string    `json:"workspace_name"`
 	Theme         string    `json:"theme"`
+	Storage       StorageConfig `json:"storage"`
 	Revision      int64     `json:"revision"`
 	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+// StorageConfig keeps the control-plane datastore explicit and deployable.
+// SQLite is the current backend; the shape leaves room for a future backend
+// without coupling datasource adapters or scenes to persistence.
+type StorageConfig struct {
+	Backend       string `json:"backend"`
+	Path          string `json:"path"`
+	RetentionDays int    `json:"retention_days"`
+	WAL           bool   `json:"wal"`
 }
 
 type SceneDocument struct {

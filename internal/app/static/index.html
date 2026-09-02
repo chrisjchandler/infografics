@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Infograf | Studio</title>
+  <title>Infografics | Studio</title>
   <style>
     :root {
       --bg: #f1e6d3;
@@ -163,7 +163,11 @@
     }
     .section, .card, .annotation, .metric-card {
       padding: 0.95rem;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
+    input, select, textarea { min-width: 0; max-width: 100%; }
     .section {
       display: grid;
       gap: 0.8rem;
@@ -181,6 +185,15 @@
     }
     .two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .three, .metric-grid, .facts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .metric-grid { grid-template-columns: 1fr; }
+      .graph-gallery { display: grid; gap: 14px; }
+      .graph-card { border: 1px solid rgba(24,33,43,.12); border-radius: 18px; background: rgba(255,255,255,.72); padding: 12px; overflow: hidden; }
+      .graph-card-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; flex-wrap: wrap; margin-bottom: 4px; }
+      .graph-card-head span { color: #67717c; font: 12px var(--mono); overflow-wrap: anywhere; }
+      .graph-card svg { display: block; width: 100%; height: auto; }
+      [contenteditable="true"] { cursor: text; border-radius: 8px; outline: 1px dashed transparent; }
+      [contenteditable="true"]:hover, [contenteditable="true"]:focus { outline-color: rgba(47,95,152,.45); background: rgba(255,255,255,.55); }
+    .metric-card { min-width: 0; overflow-wrap: anywhere; }
     .field label, .tree-label, .tiny {
       display: block;
       color: var(--muted);
@@ -261,6 +274,8 @@
       font-family: var(--mono);
       font-size: 0.85rem;
       line-height: 1.55;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
     pre { margin: 0; white-space: pre-wrap; }
     .status-healthy { color: var(--teal); }
@@ -286,15 +301,15 @@
   <div class="shell">
     <header class="masthead">
       <div>
-        <div class="eyebrow">Infograf Studio</div>
-        <h1 id="hero-title">Live metric storytelling with actual animation and chart integrity</h1>
-        <p class="lede" id="hero-lede">On September 2, 2026 this runtime is connected to live Graphite at <span class="mono">172.16.0.11:8080</span>. Studio is for playback and export. Configure is for source discovery, metric tree browsing, and expression building.</p>
+        <div class="eyebrow">Infografics Studio</div>
+        <h1 id="hero-title" contenteditable="true" spellcheck="true" title="Click to edit heading">Live metric storytelling with actual animation and chart integrity</h1>
+        <p class="lede" id="hero-lede" contenteditable="true" spellcheck="true" title="Click to edit subtext">Infografics turns timestamped values and events into deterministic visual stories. Studio is for playback and export; Configure is for source discovery, bindings, and expressions.</p>
       </div>
       <div class="meta">
         <div class="nav-row">
           <div class="nav">
             <button id="nav-studio" data-route="studio">Studio</button>
-            <button id="nav-configure" data-route="configure">Configure</button>
+            <button id="nav-configure" data-route="configure">Dashboards & Configure</button>
           </div>
         </div>
         <div class="chip-row">
@@ -303,6 +318,7 @@
           <div class="chip"><span id="timestamp-chip">time</span></div>
         </div>
         <div class="button-row">
+          <button id="dashboards-button">Dashboards</button>
           <button id="reload-button">Reload source</button>
           <button id="export-button">Export SVG</button>
         </div>
@@ -323,6 +339,12 @@
               <select id="studio-preset"></select>
             </div>
             <div class="field">
+              <label for="scene-selector">Saved dashboard</label>
+              <select id="scene-selector"><option value="">Current unsaved view</option></select>
+            </div>
+            <div class="field"><label for="studio-heading">Heading</label><input id="studio-heading" type="text" value="Operations live studio"></div>
+            <div class="field"><label for="studio-subtext">Subtext</label><textarea id="studio-subtext" rows="3">Timestamped values determine the scene position, trend state, and replay frame; Configure manages discovery and authoring.</textarea></div>
+            <div class="field">
               <label for="studio-period">Time window</label>
               <select id="studio-period"></select>
             </div>
@@ -339,8 +361,11 @@
                 <label for="studio-metric-3">Metric C</label>
                 <input id="studio-metric-3" type="text" list="metric-options">
               </div>
+              <div class="field" id="studio-slot-4"><label for="studio-metric-4">Metric D</label><input id="studio-metric-4" type="text" list="metric-options"></div>
+              <div class="field" id="studio-slot-5"><label for="studio-metric-5">Metric E</label><input id="studio-metric-5" type="text" list="metric-options"></div>
+              <div class="field" id="studio-slot-6"><label for="studio-metric-6">Metric F</label><input id="studio-metric-6" type="text" list="metric-options"></div>
             </div>
-            <button id="apply-studio-button">Load selected scene</button>
+            <div class="button-row" style="justify-content:start"><button id="apply-studio-button">Load selected scene</button><button id="save-unsaved-button">Save this view</button></div>
           </section>
 
           <section class="section">
@@ -358,6 +383,15 @@
                 <option value="250" selected>Normal</option>
                 <option value="500">Slow</option>
               </select>
+            </div>
+            <div class="field">
+              <label for="motion-profile">Motion profile</label>
+              <select id="motion-profile">
+                <option value="metric" selected>Metric faithful</option>
+                <option value="cinematic">Cinematic easing</option>
+                <option value="freeze">Hold on source frames</option>
+              </select>
+              <div class="help">Profiles only change interpolation/frame presentation; source time and values remain exact.</div>
             </div>
             <input id="timeline-slider" type="range" min="0" max="0" step="1" value="0">
             <div class="mono" id="timeline-caption">waiting for scene data</div>
@@ -383,6 +417,11 @@
           <div class="canvas-wrap">
             <div id="timeline-host"></div>
           </div>
+          <section class="section">
+            <h3>Graph panels · overlay-ready</h3>
+            <div class="footnote">Each selected metric gets its own labeled chart; choose the same metric across Console-1 and Console-2 to compare hosts on a shared time window.</div>
+            <div class="graph-gallery" id="graph-gallery"></div>
+          </section>
           <datalist id="metric-options"></datalist>
         </div>
       </main>
@@ -429,6 +468,25 @@
               <input id="dashboard-title" type="text">
             </div>
             <button id="save-config-button">Save configuration</button>
+          </section>
+
+          <section class="section">
+            <h3>Data store</h3>
+            <div class="two">
+              <div class="field">
+                <label for="storage-backend">Backend</label>
+                <select id="storage-backend"><option value="sqlite">SQLite control plane</option></select>
+              </div>
+              <div class="field">
+                <label for="storage-retention">Retention (days)</label>
+                <input id="storage-retention" type="number" min="0" step="1">
+              </div>
+            </div>
+            <div class="field">
+              <label for="storage-path">Datastore path</label>
+              <input id="storage-path" type="text" spellcheck="false">
+            </div>
+            <div class="footnote">SQLite stores configuration, scenes, revisions, and source metadata locally. Changing the path applies on the next process start; use <span class="mono">INFOGRAF_DB_PATH</span> for an explicit deployment override.</div>
           </section>
 
           <section class="section">
@@ -536,8 +594,9 @@
       selectedMetrics: ["servers.Console-1.cpu.usage_active"],
       currentFrameIndex: 0,
       playbackTimer: null,
-      spriteTick: 0,
       selectedSceneID: "",
+      dashboardSubtitle: "Timestamped values determine the scene position, trend state, and replay frame; Configure manages discovery and authoring.",
+      motionProfile: "metric",
     };
 
     const $ = (id) => document.getElementById(id);
@@ -577,10 +636,15 @@
     }
 
     function primaryClipState() {
-      const delta = primaryMetricDelta();
-      if (delta > 0.0001) return "rising";
-      if (delta < -0.0001) return "falling";
+      const series = currentSeries();
+      const metric = currentFrame()?.metrics?.find((item) => item.metric_name === series?.metric_name);
+      if (metric?.increasing) return "rising";
+      if (metric?.decreasing) return "falling";
       return "steady";
+    }
+
+    function objectState(id) {
+      return currentFrame()?.objects?.find((item) => item.id === id) || null;
     }
 
     function metricLabel(metric) {
@@ -618,15 +682,24 @@
       if (state.selectedMetrics[0]) url.searchParams.set("metric", state.selectedMetrics[0]);
       if (state.selectedMetrics[1]) url.searchParams.set("metric_b", state.selectedMetrics[1]);
       if (state.selectedMetrics[2]) url.searchParams.set("metric_c", state.selectedMetrics[2]);
+      if (state.selectedMetrics[3]) url.searchParams.set("metric_d", state.selectedMetrics[3]);
+      if (state.selectedMetrics[4]) url.searchParams.set("metric_e", state.selectedMetrics[4]);
+      if (state.selectedMetrics[5]) url.searchParams.set("metric_f", state.selectedMetrics[5]);
       state.sceneResponse = await fetchJSON(url);
       state.currentFrameIndex = state.sceneResponse.frames.length - 1;
     }
 
     function populateControls() {
-      $("product-name").value = state.config.product_name || "Infograf";
-      $("workspace-name").value = state.config.workspace_name || "Crayons";
+      $("product-name").value = state.config.product_name || "Infografics";
+      $("workspace-name").value = state.config.workspace_name || "Operations";
+      $("storage-backend").value = state.config.storage?.backend || "sqlite";
+      $("storage-path").value = state.config.storage?.path || "data/infograf.db";
+      $("storage-retention").value = String(state.config.storage?.retention_days ?? 30);
       if (!$("dashboard-title").value) {
-        $("dashboard-title").value = `${state.config.workspace_name || "Crayons"} live studio`;
+        $("dashboard-title").value = `${state.config.workspace_name || "Operations"} live studio`;
+      }
+      if (!$("studio-heading").value || $("studio-heading").value === "Operations live studio") {
+        $("studio-heading").value = $("dashboard-title").value;
       }
       $("graphite-source").value = state.catalog.source_url;
       $("catalog-chip").textContent = state.catalog.connected ? `${state.catalog.metrics.length} live metrics` : "fallback catalog";
@@ -638,12 +711,13 @@
           <div>${safe(connector.description)}</div>
         </article>
       `).join("");
+      $("scene-selector").innerHTML = `<option value="">Current unsaved view</option>` + state.scenes.map((scene) => `<option value="${safe(scene.id)}" ${scene.id === state.selectedSceneID ? "selected" : ""}>${safe(scene.name)}</option>`).join("");
       $("metric-options").innerHTML = state.catalog.metrics.map((metric) => `<option value="${safe(metric.metric)}">${safe(metric.label)}</option>`).join("");
       const presetOptions = state.catalog.presets.map((preset) => `<option value="${preset.key}" ${preset.key === state.selectedPreset ? "selected" : ""}>${safe(preset.label)}</option>`).join("");
       const periodOptions = state.catalog.periods.map((period) => `<option value="${period.key}" ${period.key === state.selectedPeriod ? "selected" : ""}>${safe(period.label)}</option>`).join("");
       $("studio-preset").innerHTML = presetOptions;
       $("studio-period").innerHTML = periodOptions;
-      for (let i = 1; i <= 3; i++) {
+      for (let i = 1; i <= 6; i++) {
         $(`studio-metric-${i}`).value = state.selectedMetrics[i - 1] || "";
       }
       syncMetricSlots();
@@ -654,7 +728,7 @@
 
     function syncMetricSlots() {
       const slots = selectedPresetMeta().metric_slots || 1;
-      for (let i = 1; i <= 3; i++) {
+      for (let i = 1; i <= 6; i++) {
         $(`studio-slot-${i}`).classList.toggle("hidden", i > slots);
       }
     }
@@ -741,8 +815,10 @@
           const payload = scene.payload || {};
           if (payload.preset) state.selectedPreset = payload.preset;
           if (payload.period) state.selectedPeriod = payload.period;
-          if (Array.isArray(payload.metrics)) state.selectedMetrics = payload.metrics.slice(0, 3);
+          if (Array.isArray(payload.metrics)) state.selectedMetrics = payload.metrics.slice(0, 6);
           $("dashboard-title").value = payload.title || scene.name;
+          $("studio-heading").value = payload.title || scene.name;
+          $("studio-subtext").value = payload.subtitle || state.dashboardSubtitle;
           $("scene-name").value = scene.name;
           populateControls();
           await loadSceneData();
@@ -754,11 +830,15 @@
     function chartPoints(series, width, height, offsetX, offsetY) {
       if (!series?.points?.length) return [];
       const values = series.points.map((point) => point.value);
+      const times = series.points.map((point) => Date.parse(point.timestamp));
+      const start = times[0];
+      const end = times[times.length - 1];
+      const span = end - start;
       let min = Math.min(...values);
       let max = Math.max(...values);
       if (min === max) max = min + 1;
       return series.points.map((point, index) => ({
-        x: offsetX + (series.points.length === 1 ? 0 : index / (series.points.length - 1) * width),
+        x: offsetX + (series.points.length === 1 ? width : (span > 0 ? (times[index] - start) / span : index / (series.points.length - 1)) * width),
         y: offsetY + (1 - (point.value - min) / (max - min)) * height,
         value: point.value,
         timestamp: point.timestamp,
@@ -769,15 +849,21 @@
       return points.map((point, index) => `${index === 0 ? "M" : "L"} ${fmt(point.x, 1)} ${fmt(point.y, 1)}`).join(" ");
     }
 
-    function spriteSVG(assetName, anchorX, anchorY, clipState, scale = 1) {
+    function spriteSVG(assetName, anchorX, anchorY, clipState, object = {}) {
       const meta = state.atlas[assetName];
-      const frame = state.spriteTick % meta.frames_per_state;
-      const row = meta.states[clipState]?.row ?? meta.states.steady.row;
+      const clipMeta = meta.states[clipState] || meta.states.steady;
+      const profileFactor = state.motionProfile === "cinematic" ? 1.35 : state.motionProfile === "freeze" ? 0 : 1;
+      const speed = Math.max(0, Number(object.animation_speed || 1)) * profileFactor;
+      const sourceSeconds = Math.floor(Date.parse(currentTimestamp()) / 1000);
+      const frame = speed === 0 ? 0 : Math.floor(sourceSeconds * clipMeta.fps * speed) % meta.frames_per_state;
+      const row = clipMeta.row;
+      const scale = Number(object.scale || 1);
+      const rotation = Number(object.rotation || 0);
       const imageW = meta.cell.width * meta.frames_per_state;
       const imageH = meta.cell.height * Object.keys(meta.states).length;
       const clipID = `clip-${assetName}-${frame}-${row}`;
       return `
-        <g transform="translate(${fmt(anchorX - meta.anchor.x * scale, 1)} ${fmt(anchorY - meta.anchor.y * scale, 1)}) scale(${scale})">
+        <g transform="translate(${fmt(anchorX, 1)} ${fmt(anchorY, 1)}) rotate(${fmt(rotation, 1)}) scale(${fmt(scale, 3)}) translate(${-meta.anchor.x} ${-meta.anchor.y})" opacity="${fmt(object.opacity ?? 1, 3)}">
           <defs>
             <clipPath id="${clipID}">
               <rect x="0" y="0" width="${meta.cell.width}" height="${meta.cell.height}"></rect>
@@ -820,18 +906,34 @@
       const series = currentSeries();
       if (!frame || !series) return;
       const points = chartPoints(series, 900, 320, 120, 90);
-      const active = points[state.currentFrameIndex] || points[points.length - 1];
       const clip = primaryClipState();
       const metric = frame.metrics.find((item) => item.metric_name === series.metric_name);
+      const focus = objectState("focus") || {};
+      const active = {
+        x: 120 + Number(focus.x ?? 0.9) * 900,
+        y: 90 + Number(focus.y ?? 0.5) * 320,
+      };
       const title = $("dashboard-title").value || state.sceneResponse.scene.title;
       let sceneArt = "";
       if (state.selectedPreset === "icarus") {
-        sceneArt = spriteSVG("icarus", active.x, active.y, clip, 1);
+        sceneArt = spriteSVG("icarus", active.x, active.y, clip, focus);
       } else if (state.selectedPreset === "cerberus") {
-        sceneArt = spriteSVG("cerberus", 640, 402, clip, 1);
+        sceneArt = spriteSVG("cerberus", active.x, active.y, clip, focus);
       } else {
-        sceneArt = spriteSVG("sisyphus", active.x, active.y, clip, 1);
+        sceneArt = spriteSVG("sisyphus", active.x, active.y, clip, focus);
       }
+
+      const activeEvent = frame.active_events?.find((event) => !["current", "peak", "trough", "slope"].includes(event.id));
+      const calloutX = active.x > 700 ? 118 : 760;
+      const calloutY = active.y < 330 ? 382 : 150;
+      const eventCallout = activeEvent ? `
+        <g id="active-event-callout" transform="translate(${calloutX} ${calloutY})">
+          <path d="M32 104 L6 134 L70 112" fill="#fff8e8" stroke="#b7791f" stroke-width="3"></path>
+          <rect width="382" height="116" rx="20" fill="#fff8e8" stroke="#b7791f" stroke-width="3"></rect>
+          <text x="24" y="34" fill="#8a4b08" font-size="13" font-weight="800" letter-spacing="2">ACTIVE EVENT</text>
+          <text x="24" y="64" fill="#18212b" font-size="19" font-weight="800">${safe(activeEvent.title)}</text>
+          <text x="24" y="91" fill="#67717c" font-size="14">${safe(activeEvent.attributes?.detail || activeEvent.type)}</text>
+        </g>` : "";
 
       const extraDots = state.sceneResponse.series.slice(1, 3).map((extra, index) => {
         const pts = chartPoints(extra, 900, 220, 120, 120 + index * 28);
@@ -855,12 +957,14 @@
           ${points.map((point, index) => `<circle data-point-index="${index}" cx="${fmt(point.x, 1)}" cy="${fmt(point.y, 1)}" r="${index === state.currentFrameIndex ? 7 : 4}" fill="${index === state.currentFrameIndex ? "#b42318" : "#2f5f98"}"></circle>`).join("")}
           ${extraDots}
           ${sceneArt}
+          ${eventCallout}
           <text x="92" y="66" fill="#67717c" font-size="14" letter-spacing="3">LIVE INFOGRAPHIC · TIME ON X · VALUE ON Y</text>
           <text x="92" y="102" fill="#18212b" font-family="var(--display)" font-size="34">${safe(title)}</text>
           <text x="92" y="132" fill="#67717c" font-size="18">${safe(metricLabel(series.metric_name))} · ${safe(series.semantics.unit || "value")} · ${safe(state.sceneResponse.period_label)}</text>
           <text x="104" y="596" fill="#67717c" font-size="16">${safe(series.points[0].timestamp.slice(11, 16))} UTC</text>
           <text x="1006" y="596" fill="#67717c" font-size="16">${safe(series.points[series.points.length - 1].timestamp.slice(11, 16))} UTC</text>
-          <text x="46" y="340" fill="#67717c" font-size="16" transform="rotate(-90 46 340)">${safe(series.semantics.unit || "value")}</text>
+          <text x="52" y="340" fill="#67717c" font-size="16" transform="rotate(-90 52 340)">Value (${safe(series.semantics.unit || "value")})</text>
+          <text x="548" y="642" fill="#67717c" font-size="16" text-anchor="middle">Time →</text>
           <rect x="856" y="86" width="256" height="94" rx="18" fill="rgba(255,255,255,0.82)" stroke="rgba(24,33,43,0.1)"></rect>
           <text x="878" y="116" fill="#67717c" font-size="14" letter-spacing="2">CURRENT SAMPLE</text>
           <text x="878" y="148" fill="#18212b" font-size="28">${fmt(series.points[state.currentFrameIndex].value)} ${safe(series.semantics.unit || "")}</text>
@@ -877,17 +981,42 @@
       $("timeline-host").innerHTML = `
         <svg viewBox="0 0 960 120" role="img" aria-label="Playback timeline">
           <rect width="960" height="120" rx="18" fill="rgba(255,255,255,0.82)"></rect>
+          <text x="64" y="14" fill="#67717c" font-size="12" font-weight="800" letter-spacing="2">${safe(metricLabel(series.metric_name))} · ${safe(series.semantics.unit || "value")} · TIME / VALUE</text>
           <path d="${linePath(points)}" fill="none" stroke="#2f5f98" stroke-width="3"></path>
           ${points.map((point, index) => `<circle data-point-index="${index}" cx="${fmt(point.x, 1)}" cy="${fmt(point.y, 1)}" r="${index === state.currentFrameIndex ? 6 : 3.2}" fill="${index === state.currentFrameIndex ? "#b42318" : "#4e7ab2"}"></circle>`).join("")}
+          <text x="64" y="108" fill="#67717c" font-size="12">${safe(series.points[0].timestamp)}</text>
+          <text x="896" y="108" fill="#67717c" font-size="12" text-anchor="end">${safe(series.points[series.points.length - 1].timestamp)}</text>
         </svg>
       `;
       tooltipHandlers($("timeline-host"));
     }
 
+    function renderGraphGallery() {
+      const seriesList = state.sceneResponse?.series || [];
+      $("graph-gallery").innerHTML = seriesList.map((series, index) => {
+        const points = chartPoints(series, 720, 180, 92, 48);
+        const values = series.points.map((point) => point.value);
+        const min = Math.min(...values), max = Math.max(...values);
+        return `<article class="graph-card">
+          <div class="graph-card-head"><strong>${safe(metricLabel(series.metric_name))}</strong><span>${safe(series.semantics.unit || "value")} · ${safe(series.metric_name)}</span></div>
+          <svg viewBox="0 0 860 270" role="img" aria-label="${safe(metricLabel(series.metric_name))} over time">
+            <path d="${linePath(points)}" fill="none" stroke="${["#2f5f98", "#b7791f", "#b42318"][index % 3]}" stroke-width="5" stroke-linecap="round"></path>
+            ${points.map((point, pointIndex) => `<circle data-point-index="${pointIndex}" cx="${fmt(point.x, 1)}" cy="${fmt(point.y, 1)}" r="${pointIndex === state.currentFrameIndex ? 6 : 3}" fill="#18212b"></circle>`).join("")}
+            <text x="24" y="56" fill="#67717c" font-size="14">${fmt(max)} ${safe(series.semantics.unit || "")}</text>
+            <text x="24" y="232" fill="#67717c" font-size="14">${fmt(min)} ${safe(series.semantics.unit || "")}</text>
+            <text x="462" y="262" fill="#67717c" font-size="14" text-anchor="middle">Time →</text>
+            <text x="18" y="150" fill="#67717c" font-size="14" transform="rotate(-90 18 150)">Value</text>
+          </svg>
+        </article>`;
+      }).join("");
+      tooltipHandlers($("graph-gallery"));
+    }
+
     function renderMetricsAndNotes() {
       const frame = currentFrame();
       if (!frame) return;
-      $("metric-grid").innerHTML = frame.metrics.map((metric) => `
+      const uniqueMetrics = [...new Map(frame.metrics.map((metric) => [metric.metric_name, metric])).values()];
+      $("metric-grid").innerHTML = uniqueMetrics.map((metric) => `
         <article class="metric-card">
           <div class="tiny">${safe(metricLabel(metric.metric_name))}</div>
           <div class="${metric.decreasing ? "status-critical" : metric.increasing ? "status-warning" : "status-healthy"}"><strong>${fmt(metric.value)}</strong></div>
@@ -895,14 +1024,15 @@
           <div>normalized ${fmt(metric.normalized)} · mapped ${fmt(metric.mapped_value)} · rate ${fmt(metric.rate_per_second)}</div>
         </article>
       `).join("");
+      const activeIDs = new Set((frame.active_events || []).map((event) => event.id));
       $("annotation-list").innerHTML = state.sceneResponse.annotations.map((note) => `
         <article class="annotation ${safe(note.severity)}">
           <div class="tiny">${safe(note.timestamp)}</div>
-          <strong>${safe(note.title)}</strong>
+          <strong>${activeIDs.has(note.id) ? "NOW · " : ""}${safe(note.title)}</strong>
           <div>${safe(note.detail)}</div>
         </article>
       `).join("");
-      $("annotation-chip").textContent = `${state.sceneResponse.annotations.length} notes`;
+      $("annotation-chip").textContent = `${activeIDs.size} active · ${state.sceneResponse.annotations.length} total`;
     }
 
     function renderFacts() {
@@ -958,8 +1088,11 @@
     }
 
     function renderAll() {
-      document.title = `${$("product-name").value || "Infograf"} | ${$("dashboard-title").value || "Studio"}`;
-      $("hero-title").textContent = $("dashboard-title").value || state.sceneResponse.scene.title;
+      document.title = `${$("product-name").value || "Infografics"} | ${$("dashboard-title").value || "Studio"}`;
+      const heading = $("studio-heading").value.trim() || $("dashboard-title").value.trim() || state.sceneResponse.scene.title;
+      const subtitle = $("studio-subtext").value.trim() || state.dashboardSubtitle;
+      if (document.activeElement !== $("hero-title")) $("hero-title").textContent = heading;
+      if (document.activeElement !== $("hero-lede")) $("hero-lede").textContent = `${state.sceneResponse.source_label} · ${state.sceneResponse.period_label}. ${subtitle}`;
       $("preset-chip").textContent = `${selectedPresetMeta().label} · ${state.sceneResponse.period_label}`;
       $("timestamp-chip").textContent = currentTimestamp();
       $("scene-description").textContent = state.sceneResponse.scene.description;
@@ -968,12 +1101,13 @@
       $("config-chip").textContent = `revision ${state.config.revision}`;
       $("studio-preset").value = state.selectedPreset;
       $("studio-period").value = state.selectedPeriod;
-      $("scene-name").value ||= $("dashboard-title").value;
+      $("scene-name").value ||= heading;
       $("expr-metric").value ||= state.selectedMetrics[0] || "";
       $("timeline-slider").max = String(Math.max(0, state.sceneResponse.frames.length - 1));
       $("timeline-slider").value = String(state.currentFrameIndex);
       renderStage();
       renderTimeline();
+      renderGraphGallery();
       renderMetricsAndNotes();
       renderFacts();
       updateYamlEditor();
@@ -985,9 +1119,15 @@
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          product_name: $("product-name").value.trim() || "Infograf",
-          workspace_name: $("workspace-name").value.trim() || "Crayons",
+          product_name: $("product-name").value.trim() || "Infografics",
+          workspace_name: $("workspace-name").value.trim() || "Operations",
           theme: state.config.theme || "dark",
+          storage: {
+            backend: $("storage-backend").value,
+            path: $("storage-path").value.trim() || "data/infograf.db",
+            retention_days: Math.max(0, Number($("storage-retention").value || 30)),
+            wal: true,
+          },
           revision: 0,
         }),
       });
@@ -997,7 +1137,8 @@
     function scenePayload() {
       return {
         type: "graphite_dashboard",
-        title: $("dashboard-title").value.trim(),
+        title: $("studio-heading").value.trim() || $("dashboard-title").value.trim(),
+        subtitle: $("studio-subtext").value.trim(),
         preset: state.selectedPreset,
         period: state.selectedPeriod,
         metrics: state.selectedMetrics.filter(Boolean),
@@ -1014,13 +1155,15 @@
         payload: scenePayload(),
       };
       const url = method === "PATCH" ? `/api/v1/scenes/${state.selectedSceneID}` : "/api/v1/scenes";
-      await fetchJSON(url, {
+      const saved = await fetchJSON(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+      state.selectedSceneID = saved.id || state.selectedSceneID;
       state.scenes = await fetchJSON("/api/v1/scenes");
       renderScenes();
+      populateControls();
     }
 
     function setRoute(route) {
@@ -1039,11 +1182,7 @@
     async function applySceneSelection() {
       state.selectedPreset = $("studio-preset").value;
       state.selectedPeriod = $("studio-period").value;
-      state.selectedMetrics = [
-        $("studio-metric-1").value.trim(),
-        $("studio-metric-2").value.trim(),
-        $("studio-metric-3").value.trim(),
-      ];
+      state.selectedMetrics = Array.from({length: 6}, (_, index) => $(`studio-metric-${index + 1}`).value.trim());
       syncMetricSlots();
       stopPlayback();
       await loadSceneData();
@@ -1086,6 +1225,7 @@
       });
       $("apply-studio-button").addEventListener("click", applySceneSelection);
       $("play-button").addEventListener("click", startPlayback);
+      $("motion-profile").addEventListener("change", (event) => { state.motionProfile = event.target.value; renderAll(); });
       $("pause-button").addEventListener("click", () => { stopPlayback(); renderAll(); });
       $("prev-button").addEventListener("click", () => {
         stopPlayback();
@@ -1109,6 +1249,26 @@
       });
       $("save-config-button").addEventListener("click", saveConfig);
       $("save-scene-button").addEventListener("click", () => saveScene("POST"));
+      $("save-unsaved-button").addEventListener("click", () => saveScene("POST"));
+      $("dashboards-button").addEventListener("click", () => setRoute("configure"));
+      $("scene-selector").addEventListener("change", async (event) => {
+        const id = event.target.value;
+        if (!id) { state.selectedSceneID = ""; renderScenes(); return; }
+        const scene = state.scenes.find((item) => item.id === id);
+        if (!scene) return;
+        state.selectedSceneID = id;
+        const payload = scene.payload || {};
+        state.selectedPreset = payload.preset || state.selectedPreset;
+        state.selectedPeriod = payload.period || state.selectedPeriod;
+        state.selectedMetrics = Array.isArray(payload.metrics) ? payload.metrics.slice(0, 6) : state.selectedMetrics;
+        $("dashboard-title").value = payload.title || scene.name;
+        $("studio-heading").value = payload.title || scene.name;
+        $("studio-subtext").value = payload.subtitle || state.dashboardSubtitle;
+        $("scene-name").value = scene.name;
+        populateControls();
+        await loadSceneData();
+        renderAll();
+      });
       $("update-scene-button").addEventListener("click", () => {
         if (state.selectedSceneID) saveScene("PATCH");
       });
@@ -1117,7 +1277,13 @@
       $("expr-threshold").addEventListener("input", updateYamlEditor);
       $("expr-duration").addEventListener("input", updateYamlEditor);
       $("expr-action").addEventListener("change", updateYamlEditor);
-      $("dashboard-title").addEventListener("input", renderAll);
+      $("dashboard-title").addEventListener("input", () => { $("studio-heading").value = $("dashboard-title").value; renderAll(); });
+      $("studio-heading").addEventListener("input", () => { $("dashboard-title").value = $("studio-heading").value; renderAll(); });
+      $("studio-subtext").addEventListener("input", () => { state.dashboardSubtitle = $("studio-subtext").value; renderAll(); });
+      $("hero-title").addEventListener("input", () => { $("studio-heading").value = $("hero-title").innerText.trim(); $("dashboard-title").value = $("studio-heading").value; });
+      $("hero-title").addEventListener("blur", () => { $("studio-heading").value = $("hero-title").innerText.trim(); $("dashboard-title").value = $("studio-heading").value; renderAll(); });
+      $("hero-lede").addEventListener("input", () => { const text = $("hero-lede").innerText.replace(/^.*?\. /, ""); $("studio-subtext").value = text; state.dashboardSubtitle = text; });
+      $("hero-lede").addEventListener("blur", () => { const text = $("hero-lede").innerText.replace(/^.*?\. /, ""); $("studio-subtext").value = text; state.dashboardSubtitle = text; renderAll(); });
       $("export-button").addEventListener("click", () => {
         const svg = $("stage-host").querySelector("svg");
         if (!svg) return;
@@ -1125,7 +1291,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `${($("dashboard-title").value || "infograf").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.svg`;
+        a.download = `${($("dashboard-title").value || "infografics").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.svg`;
         a.click();
         URL.revokeObjectURL(url);
       });
@@ -1136,12 +1302,6 @@
           renderRoute();
         }
       });
-      setInterval(() => {
-        state.spriteTick = (state.spriteTick + 1) % 8;
-        if (state.route === "studio" && state.sceneResponse) {
-          renderStage();
-        }
-      }, 120);
     }
 
     bindEvents();

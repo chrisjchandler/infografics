@@ -10,7 +10,35 @@ import (
 	"time"
 
 	"infograf/internal/model"
+	"infograf/internal/sources"
 )
+
+func TestAdaptSourceSupportsEquivalentSimpleInputs(t *testing.T) {
+	t.Parallel()
+	server, err := New(Options{DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+	defer server.Close()
+	for _, body := range []string{
+		`{"kind":"csv","source_ref":"upload","payload":"timestamp,value\n2026-09-02T12:00:00Z,42\n"}`,
+		`{"kind":"plaintext","source_ref":"raw","payload":"value 42 1788350400\n"}`,
+	} {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/sources/adapt", bytes.NewBufferString(body))
+		res := httptest.NewRecorder()
+		server.mux.ServeHTTP(res, req)
+		if res.Code != http.StatusOK {
+			t.Fatalf("adapt source status = %d, body=%s", res.Code, res.Body.String())
+		}
+		var result sources.Result
+		if err := json.Unmarshal(res.Body.Bytes(), &result); err != nil {
+			t.Fatalf("decode source result: %v", err)
+		}
+		if len(result.Series) != 1 || result.Series[0].Points[0].Value != 42 {
+			t.Fatalf("unexpected canonical result: %#v", result)
+		}
+	}
+}
 
 func TestServerAPIFlow(t *testing.T) {
 	t.Parallel()
@@ -38,11 +66,11 @@ func TestServerAPIFlow(t *testing.T) {
 
 	var cfg model.AppConfig
 	requestJSON(t, ts.URL+"/api/v1/config", http.MethodGet, nil, &cfg, http.StatusOK)
-	if cfg.ProductName != "Infograf" || cfg.WorkspaceName != "Crayons" {
+	if cfg.ProductName != "Infografics" || cfg.WorkspaceName != "Operations" {
 		t.Fatalf("unexpected seed config: %#v", cfg)
 	}
 
-	updatedCfg := model.AppConfig{ProductName: "Infograf", WorkspaceName: "Launchpad", Theme: "dark"}
+	updatedCfg := model.AppConfig{ProductName: "Infografics", WorkspaceName: "Launchpad", Theme: "dark"}
 	requestJSON(t, ts.URL+"/api/v1/config", http.MethodPut, updatedCfg, &cfg, http.StatusOK)
 	if cfg.WorkspaceName != "Launchpad" || cfg.Revision <= 1 {
 		t.Fatalf("config not updated: %#v", cfg)

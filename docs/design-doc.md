@@ -6,8 +6,8 @@ Infograf is a greenfield monitoring-visualization platform that turns metrics, e
 
 The goal is to let a beginner upload a spreadsheet and get something useful quickly, while an advanced operator can use connectors, YAML, revision history, RBAC, and external hooks without switching to a different product.
 
-Working product name in prose: **Infograf**.
-Existing folder name: **Crayons**.
+Working product name in prose: **Infografics**.
+The existing repository folder name is retained only as a filesystem/container detail.
 
 ## Product principles
 

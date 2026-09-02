@@ -101,11 +101,12 @@ func (s *Store) seed(ctx context.Context) error {
 	}
 	if count == 0 {
 		cfg := model.AppConfig{
-			ProductName:  "Infograf",
-			WorkspaceName: "Crayons",
-			Theme:        "dark",
-			Revision:     1,
-			UpdatedAt:    time.Now().UTC(),
+			ProductName:   "Infografics",
+			WorkspaceName: "Operations",
+			Theme:         "dark",
+			Storage:       model.StorageConfig{Backend: "sqlite", Path: "data/infograf.db", RetentionDays: 30, WAL: true},
+			Revision:      1,
+			UpdatedAt:     time.Now().UTC(),
 		}
 		if _, err := s.putConfigTx(ctx, cfg, false); err != nil {
 			return err
@@ -150,13 +151,25 @@ func (s *Store) PutConfig(ctx context.Context, cfg model.AppConfig) (model.AppCo
 func (s *Store) putConfigTx(ctx context.Context, cfg model.AppConfig, silent bool) (model.AppConfig, error) {
 	current, _ := s.GetConfig(ctx)
 	if strings.TrimSpace(cfg.ProductName) == "" {
-		cfg.ProductName = "Infograf"
+		cfg.ProductName = "Infografics"
 	}
 	if strings.TrimSpace(cfg.WorkspaceName) == "" {
-		cfg.WorkspaceName = "Crayons"
+		cfg.WorkspaceName = "Operations"
 	}
 	if strings.TrimSpace(cfg.Theme) == "" {
 		cfg.Theme = "dark"
+	}
+	if strings.TrimSpace(cfg.Storage.Backend) == "" {
+		cfg.Storage.Backend = "sqlite"
+	}
+	if cfg.Storage.Backend != "sqlite" {
+		return model.AppConfig{}, fmt.Errorf("unsupported storage backend %q; available backends: sqlite", cfg.Storage.Backend)
+	}
+	if strings.TrimSpace(cfg.Storage.Path) == "" {
+		cfg.Storage.Path = "data/infograf.db"
+	}
+	if cfg.Storage.RetentionDays < 0 {
+		return model.AppConfig{}, fmt.Errorf("storage retention_days cannot be negative")
 	}
 	cfg.UpdatedAt = time.Now().UTC()
 	if cfg.Revision == 0 {

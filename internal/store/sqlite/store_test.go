@@ -25,8 +25,20 @@ func TestOpenSeedAndRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get config: %v", err)
 	}
-	if cfg.ProductName != "Infograf" {
+	if cfg.ProductName != "Infografics" {
 		t.Fatalf("unexpected product name: %#v", cfg)
+	}
+	if cfg.Storage.Backend != "sqlite" || cfg.Storage.Path == "" || !cfg.Storage.WAL {
+		t.Fatalf("unexpected storage defaults: %#v", cfg.Storage)
+	}
+	cfg.Storage.RetentionDays = 7
+	cfg.Storage.Path = "data/custom.db"
+	if _, err := st.PutConfig(ctx, cfg); err != nil {
+		t.Fatalf("update config: %v", err)
+	}
+	updated, err := st.GetConfig(ctx)
+	if err != nil || updated.Storage.RetentionDays != 7 || updated.Storage.Path != "data/custom.db" {
+		t.Fatalf("storage round trip: %#v %v", updated.Storage, err)
 	}
 	scenes, err := st.ListScenes(ctx)
 	if err != nil {

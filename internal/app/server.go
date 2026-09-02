@@ -14,6 +14,7 @@ import (
 
 	"infograf/internal/demo"
 	"infograf/internal/model"
+	"infograf/internal/sources"
 	"infograf/internal/store"
 	sqlitestore "infograf/internal/store/sqlite"
 )
@@ -82,7 +83,40 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/v1/scenes", s.handleScenes)
 	s.mux.HandleFunc("/api/v1/scenes/", s.handleSceneByID)
 	s.mux.HandleFunc("/api/v1/revisions", s.handleRevisions)
+	s.mux.HandleFunc("/api/v1/sources/adapt", s.handleAdaptSource)
 	s.mux.HandleFunc("/", s.handleIndex)
+}
+
+type adaptSourceRequest struct {
+	Kind      string `json:"kind"`
+	SourceRef string `json:"source_ref"`
+	Payload   string `json:"payload"`
+}
+
+func (s *Server) handleAdaptSource(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", "POST")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var input adaptSourceRequest
+	if err := decodeJSON(r.Body, &input); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid source input", err.Error(), "bad_request")
+		return
+	}
+	if strings.TrimSpace(input.SourceRef) == "" {
+		writeError(w, http.StatusBadRequest, "invalid source input", "source_ref is required", "bad_request")
+		return
+	}
+	result, err := sources.DefaultRegistry().Adapt(r.Context(), strings.ToLower(strings.TrimSpace(input.Kind)), sources.Request{
+		SourceRef: input.SourceRef,
+		Payload:   []byte(input.Payload),
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "source adaptation failed", err.Error(), "source_error")
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {

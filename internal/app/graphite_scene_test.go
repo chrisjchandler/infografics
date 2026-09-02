@@ -29,6 +29,25 @@ func TestTimelineProgressSeries(t *testing.T) {
 	}
 }
 
+func TestTimelineProgressSeriesUsesElapsedTime(t *testing.T) {
+	t.Parallel()
+
+	base := time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC)
+	primary := model.CanonicalSeries{
+		MetricName: "metric",
+		Points: []model.CanonicalPoint{
+			{Timestamp: base, Value: 10},
+			{Timestamp: base.Add(time.Minute), Value: 20},
+			{Timestamp: base.Add(4 * time.Minute), Value: 30},
+		},
+	}
+
+	progress := timelineProgressSeries(primary, "graphite")
+	if got := progress.Points[1].Value; got != 25 {
+		t.Fatalf("irregular timestamp progress = %v, want 25", got)
+	}
+}
+
 func TestRangeForValuesAddsPadding(t *testing.T) {
 	t.Parallel()
 
@@ -54,5 +73,19 @@ func TestNormalizeSelectedMetricsHonorsPresetSlots(t *testing.T) {
 	got := normalizeSelectedMetrics([]string{"a", "a", "b", "c"}, graphitePresetFor("cerberus"), available)
 	if len(got) != 3 || got[0] != "a" || got[1] != "b" || got[2] != "c" {
 		t.Fatalf("unexpected metrics: %#v", got)
+	}
+}
+
+func TestFallbackGraphiteSeriesIsDeterministic(t *testing.T) {
+	t.Parallel()
+
+	specs := []graphiteMetricSpec{{Metric: "demo.metric"}}
+	first := fallbackGraphiteSeries(specs)["demo.metric"]
+	second := fallbackGraphiteSeries(specs)["demo.metric"]
+	if len(first.Datapoints) != 9 || len(second.Datapoints) != 9 {
+		t.Fatalf("unexpected fallback lengths: %d and %d", len(first.Datapoints), len(second.Datapoints))
+	}
+	if first.Datapoints[4][0] != second.Datapoints[4][0] || first.Datapoints[4][1] != second.Datapoints[4][1] {
+		t.Fatalf("fallback changed between calls: %#v %#v", first, second)
 	}
 }
