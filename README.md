@@ -56,6 +56,8 @@ docker run --rm -p 8080:8080 \
   infografics:local
 ```
 
+The equivalent repeatable helper is `./tools/docker-build.sh [image:tag]`; for example, `./tools/docker-build.sh infografics:review`. It validates the Dockerfile and uses the repository root as the build context.
+
 Open <http://127.0.0.1:8080/>. The `/data` volume persists SQLite configuration, saved dashboards, and revisions. Override the listen address, database path, or Graphite URL with `INFOGRAF_ADDR`, `INFOGRAF_DB_PATH`, and `INFOGRAF_GRAPHITE_URL`. On Linux, replace `host.docker.internal` with a reachable host or service name as appropriate.
 
 ```bash
