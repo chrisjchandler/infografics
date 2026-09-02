@@ -4,6 +4,14 @@ Infografics turns timestamped telemetry into deterministic animated infographics
 
 ![Infografics Studio](docs/screenshots/studio-infografics.png)
 
+## Screenshots
+
+| Studio playback | Canonical scene state |
+| --- | --- |
+| [Open full-size screenshot](docs/screenshots/studio-infografics.png) | [Open full-size screenshot](docs/screenshots/studio-canonical-state.png) |
+
+The screenshots are committed under `docs/screenshots/` so they render offline in repository browsers.
+
 ## Included
 
 - Go REST backend with an embedded Studio UI.
@@ -22,6 +30,13 @@ go run ./cmd/infograf
 ```
 
 Open <http://127.0.0.1:8080/>. Studio is the playback workspace. Dashboards & Configure manages saved views, source discovery, expressions, and persistence.
+
+Setup checklist:
+
+1. Install Go and Node/npm, or run `./tools/bootstrap-toolchain.sh` to provision the repository toolchain.
+2. Start the Go server with `go run ./cmd/infograf`.
+3. Open the URL printed by the server.
+4. Go to **Dashboards & Configure** to set the datastore, inspect connectors, and save a view.
 
 ```bash
 INFOGRAF_ADDR=127.0.0.1:18080 INFOGRAF_DB_PATH=/tmp/infograf-review.db go run ./cmd/infograf
@@ -51,6 +66,18 @@ Content-Type: application/json
 ```
 
 The response contains `series[]` and `events[]`. Series retain exact metric names, semantics, units, numeric ranges, and ordered timestamp/value points.
+
+Connection recipe with curl:
+
+```bash
+curl -X POST http://127.0.0.1:8080/api/v1/sources/adapt \
+  -H 'Content-Type: application/json' \
+  --data-binary @- <<'JSON'
+{"kind":"rest/json","source_ref":"api-prod","payload":"{\"data\":[{\"metric\":\"queue_depth\",\"value\":12,\"timestamp\":\"2026-09-02T12:00:00Z\"}]}"}
+JSON
+```
+
+For file-based sources, read the file into `payload` and set `kind` to `csv` or `xlsx`. For Prometheus and OTLP, forward the exporter response body unchanged. The adapter boundary does not require a database or a scene-specific schema.
 
 Supported kinds:
 
@@ -147,7 +174,3 @@ Frames are selected from source timestamp and backend scene state. Do not add ti
 npm --prefix frontend run build
 git diff --check
 ```
-
-![Studio playback](docs/screenshots/studio-infografics.png)
-
-![Canonical scene state](docs/screenshots/studio-canonical-state.png)
