@@ -44,6 +44,20 @@ Setup checklist:
 
 Stop the server with `Ctrl-C`. The default database is created at `data/infograf.db`; that path is ignored by source control.
 
+### Container runtime
+
+The Dockerfile is a small production/runtime image for the current Go monolith. It is not intended to replace the local development workflow yet.
+
+```bash
+docker build -t infografics:local .
+docker run --rm -p 8080:8080 \
+  -v infografics-data:/data \
+  -e INFOGRAF_GRAPHITE_URL=http://host.docker.internal:8080 \
+  infografics:local
+```
+
+Open <http://127.0.0.1:8080/>. The `/data` volume persists SQLite configuration, saved dashboards, and revisions. Override the listen address, database path, or Graphite URL with `INFOGRAF_ADDR`, `INFOGRAF_DB_PATH`, and `INFOGRAF_GRAPHITE_URL`. On Linux, replace `host.docker.internal` with a reachable host or service name as appropriate.
+
 ```bash
 INFOGRAF_ADDR=127.0.0.1:18080 INFOGRAF_DB_PATH=/tmp/infograf-review.db go run ./cmd/infograf
 ```

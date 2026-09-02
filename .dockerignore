@@ -1,0 +1,16 @@
+.git
+.agents
+.codex
+.tools
+.cache
+.tmp
+tmp
+temp
+data
+frontend/node_modules
+frontend/dist
+docs/screenshots
+*.log
+*.db
+*.db-shm
+*.db-wal
