@@ -1,0 +1,33 @@
+{
+  "image": "sisyphus-atlas.png",
+  "cell": {
+    "width": 128,
+    "height": 96
+  },
+  "frames_per_state": 8,
+  "states": {
+    "rising": {
+      "row": 0,
+      "fps": 10
+    },
+    "steady": {
+      "row": 1,
+      "fps": 6
+    },
+    "falling": {
+      "row": 2,
+      "fps": 10
+    }
+  },
+  "anchor": {
+    "x": 56,
+    "y": 92,
+    "meaning": "rear-foot/contact root"
+  },
+  "source_inspiration": {
+    "file": "../../source/sisyphus/greek-hypaspist.png",
+    "license": "CC0-1.0",
+    "creator": "Spring Spring"
+  },
+  "boulder": "Original Infograf artwork; no third-party rock asset used."
+}

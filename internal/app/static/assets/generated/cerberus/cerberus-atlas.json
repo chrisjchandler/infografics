@@ -1,0 +1,28 @@
+{
+  "image": "cerberus-atlas.png",
+  "cell": {
+    "width": 192,
+    "height": 144
+  },
+  "frames_per_state": 8,
+  "states": {
+    "rising": {
+      "row": 0,
+      "fps": 9
+    },
+    "steady": {
+      "row": 1,
+      "fps": 6
+    },
+    "falling": {
+      "row": 2,
+      "fps": 9
+    }
+  },
+  "anchor": {
+    "x": 90,
+    "y": 98,
+    "meaning": "body root"
+  },
+  "provenance": "Original Infograf artwork for the Cerberus option."
+}

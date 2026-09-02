@@ -1,0 +1,1124 @@
+And then we can marketplace connectors to plugin beyond the ones in the ga offering
+
+
+
+
+
+
+
+
+
+
+
+
+
+Exactly. That’s probably the cleanest extensibility story.
+The GA product ships with a deliberately useful core set—Prometheus, Graphite, OTLP/OpenTelemetry, generic REST, CSV/XLSX, raw socket/plaintext, maybe SQL—and everything beyond that can come through a connector marketplace.
+The key is making connectors describe capabilities and semantics, not just transport. A connector package should be able to say:
+name: polygon-stock-feed
+version: 1.2.0
+
+capabilities:
+  streaming: true
+  historical: true
+  events: false
+  units: true
+  metric_types: true
+
+provides:
+  - price
+  - volume
+  - change
+  - percent_change
+  - volatility
+Then the application immediately knows what workflows it can expose.
+That opens the door to third-party connectors for things like:
+- stock/crypto/market feeds
+- Salesforce
+- ServiceNow
+- Jira
+- cloud billing APIs
+- weather feeds
+- industrial telemetry
+- energy monitoring
+- education platforms
+- manufacturing systems
+- proprietary corporate APIs
+- random vendor TSDBs nobody on earth wanted to support directly
+And the marketplace asset could be more than a connector. Eventually I’d see three plugin categories:
+1. Connectors — how information enters.
+2. Scene packs — how information is represented.
+3. Transforms/semantic packs — domain-specific interpretation.
+That third category gets interesting.
+A finance pack might understand:
+revenue growth
+gross margin
+drawdown
+volatility
+runway
+while a networking pack understands:
+latency
+packet loss
+availability
+throughput
+route changes
+capacity
+Neither requires the core application to become an expert in every industry.
+I would be fairly strict about the plugin contract, though. The core should expose a stable SDK along the lines of:
+type Connector interface {
+    Metadata() Metadata
+    Capabilities() Capabilities
+    Configure(Config) error
+
+    Discover(ctx context.Context) ([]SeriesDescriptor, error)
+    Query(ctx context.Context, Query) ([]Sample, error)
+    Subscribe(ctx context.Context, Query) (<-chan Sample, error)
+}
+Everything coming out gets converted to our canonical series/event representation.
+That means a marketplace developer never needs to understand Sisyphus, Icarus, SVG animation, or the renderer. They just have to say:
+“Here is the data, and here is what I know about it.”
+
+Likewise a scene-pack developer shouldn't care whether the data came from Snowflake or netcat.
+There’s one architectural question I’d settle early: don’t allow arbitrary third-party native code directly inside the primary Go process.
+For first-party GA connectors, compiled-in Go is fine.
+For marketplace connectors, I’d favor either:
+- WASM plugins, if the connector model works comfortably within WASM constraints, or
+- a very small out-of-process connector protocol over localhost/gRPC/Unix socket.
+That gives you crash containment, permission boundaries, version isolation, and a much less terrifying marketplace security story.
+It also preserves your deployment philosophy. A third-party connector doesn't mean:
+“Congratulations, your infographic now requires twelve Kubernetes operators.”
+
+It could just be:
+crayons
+connectors/
+    polygon.wasm
+    servicenow.wasm
+    weird-industrial-thing.wasm
+Restart—or preferably hot-load—and done.
+And the marketplace itself starts building a fairly meaningful moat:
+Core engine
+   +
+official connectors
+   +
+community connectors
+   +
+commercial connectors
+   +
+scene marketplace
+   +
+semantic packs
+At that point someone cloning “animated SVG metrics” has copied maybe 10% of the product.
+The ecosystem is the harder thing to reproduce.
+I’d also make connector development stupidly easy. Ideally somebody who knows Go, Rust, Python or JavaScript can wrap a proprietary API without learning our entire codebase. A connector test harness could accept a canned response and show:
+Detected 7 series
+2 counters
+3 gauges
+1 categorical series
+historical playback supported
+streaming supported
+
+Then let the author immediately throw those into a test scene.
+That would make “we don't support my weird data source” less of a product objection and more of a weekend project.
+
+
+
+
+ 
+
+
+
+
+
+Auth models are interesting here,  we could be exposing business critical metrics albeit as a cat chasing a mouse the governance angle is still a thing,  better to allowe plugins to ldap,  obvious tls/mtls, internal auth models using hashed passwords stored locally in my mind with offer basic auth and plugins for the advanced I’m running this in my soc audience so they can leverage their yubikeys, oauth whatever or bobs marketing co with openldap or even local accounts basic audit trails,  change history all the things conventionally used.  Config rollbacks and snapshots config backups the things that take this from sideshow to wow I can run this here because it passes xyz attestation
+
+
+
+
+
+
+
+
+
+
+
+
+
+Worked for 52s
+
+Yes. This is the point where I’d deliberately design for the sentence:
+“Sure, it has cartoons in it. It also has RBAC, mTLS, immutable configuration history, encrypted backups, SSO and audit export.”
+
+That contrast is probably commercially useful.
+And this actually reinforces the Go backend choice. Modern Go has native FIPS 140-3 support; the v1.0.0 Go Cryptographic Module is CMVP validated, while the newer v1.26.0 module is currently in the validation pipeline. Go's TLS stack can automatically restrict itself to FIPS-approved algorithms when built/run appropriately. Go
+I would separate authentication from authorization completely
+Regardless of how Bob gets authenticated, our application decides what Bob can do.
+             AUTHENTICATION
+
+ Local ──────────────┐
+ LDAP / LDAPS ───────┤
+ OIDC ───────────────┤
+ SAML ───────────────┤
+ WebAuthn / FIDO2 ───┤
+ Client certificate ─┘
+                     │
+                     ▼
+              Canonical Identity
+                     │
+                     ▼
+                AUTHORIZATION
+                     │
+          Groups / Roles / Policy
+                     │
+     ┌───────────────┼────────────────┐
+     ▼               ▼                ▼
+ Workspace A     Workspace B      Data Sources
+That gives you a sane security boundary.
+An enterprise can authenticate chris@bigcorp through its IdP and map an OIDC claim like:
+groups:
+  - soc-engineering
+  - noc-readonly
+into application roles.
+Bob's Marketing Shack can have:
+bob
+alice
+marketing-intern-who-should-not-be-admin
+stored locally.
+Same authorization engine underneath.
+OIDC should absolutely be a GA feature rather than a marketplace plugin. OIDC is specifically the interoperable identity layer built over OAuth 2.0, so it buys you compatibility with a massive variety of enterprise IdPs without writing “Okta auth,” “Entra auth,” “OCI auth,” etc. separately. OpenID Foundation
+Your authentication ladder makes sense
+I would probably ship something approximately like this:
+Authentication	GA?	Intended use
+Local username/password	Yes	Small/self-contained deployments
+HTTP Basic	Yes, mainly API	Scripts/simple integrations
+LDAP/LDAPS	Yes	Traditional enterprise
+OIDC	Yes	Primary enterprise SSO path
+WebAuthn/FIDO2	Yes	Local strong MFA/passwordless
+mTLS client cert	Yes	Machines/high-assurance API
+API/service tokens	Yes	Automation/connectors
+SAML	Probably	Legacy enterprise identity
+Custom auth provider	Possible	Specialized environments
+
+
+For local passwords, I'd use Argon2id by default. OWASP currently recommends Argon2id and provides minimum memory/work parameters; for organizations specifically needing a FIPS-oriented configuration, PBKDF2-HMAC-SHA-256 is the obvious alternative profile. OWASP Cheat Sheet Series
+And I'd support YubiKeys without requiring a “YubiKey plugin.”
+Two paths:
+YubiKey
+   ↓
+WebAuthn/FIDO2
+   ↓
+our application
+or:
+YubiKey
+   ↓
+Enterprise IdP
+   ↓
+OIDC
+   ↓
+our application
+NIST explicitly recognizes WebAuthn/FIDO2 as phishing-resistant authentication, unlike passwords. NIST Pages
+That is considerably cleaner than teaching the application about every hardware token vendor.
+RBAC should be considerably finer than “admin/user”
+Because the underlying metric could be:
+cat chasing mouse: 73%
+
+while the actual underlying information is:
+$1.8B acquisition integration is three months behind schedule.
+
+The cartoon does not change the data classification.
+I'd have roles/capabilities roughly around:
+VIEW
+  scenes
+  dashboards
+  permitted metric values
+
+PRESENT
+  playback
+  snapshot
+  export
+
+ANNOTATE
+  create/edit operational events
+
+EDIT
+  scene composition
+  mappings
+  projects
+
+SOURCE_ADMIN
+  connectors
+  queries
+  credentials
+
+SECURITY_ADMIN
+  users
+  groups
+  identity providers
+  policies
+
+AUDITOR
+  audit history
+  config history
+  read-only security configuration
+
+SYSTEM_ADMIN
+  everything
+But internally these shouldn't be hardcoded roles. They should be permissions bundled into default roles.
+Then an organization can invent:
+EXEC_VIEWER
+
+which can see the finished infographic but cannot inspect the datasource, query, credentials, raw series or configuration.
+That could be extremely useful.
+And workspace isolation matters
+I think projects should live inside something like:
+Organization
+   │
+   ├── Workspace: SOC
+   │      ├── scenes
+   │      ├── sources
+   │      └── events
+   │
+   ├── Workspace: Marketing
+   │
+   └── Workspace: Executive
+Permissions apply at the workspace/resource level.
+That gives larger customers a credible way of running one instance without everyone seeing everyone else's crayons.
+TLS should be boringly complete
+Out of the box:
+HTTP → HTTPS redirect
+TLS certificate/key
+custom CA trust
+internal enterprise CA
+certificate reload
+mTLS optional/required by listener
+And I'd make TLS policy configurable:
+tls:
+  minimum_version: "1.2"
+  client_auth: optional
+
+  certificate:
+    cert: /etc/crayons/tls/server.crt
+    key: /etc/crayons/tls/server.key
+
+  client_ca:
+    file: /etc/crayons/tls/corp-ca.pem
+For high-assurance deployments:
+client_auth: required
+Now your metric ingest API can require certificates even while browser users authenticate through OIDC.
+That's a nice division.
+Machine identities deserve their own model
+Don't make integrations impersonate users.
+Something like:
+service-account:
+    prometheus-importer
+
+permissions:
+    series.write
+    events.write
+
+workspace:
+    network-operations
+
+expires:
+    2027-01-01
+Authentication might be:
+- scoped bearer token
+- mTLS certificate
+- OIDC client credential
+- perhaps signed request later
+Tokens should be revocable, expiring and rotatable.
+And ideally only the hash of an API token is retained, so displaying it works like GitHub:
+Here's the token. You will not be able to retrieve it again.
+
+Secrets are separate from configuration
+This becomes important once connectors contain:
+Prometheus credentials
+database passwords
+REST tokens
+OAuth client secrets
+TLS private keys
+The config can say:
+source:
+  name: Production Prometheus
+
+  credential:
+    secret_ref: source/42/auth
+The actual secret should live encrypted.
+For little deployments, the application can have an encrypted local secrets store.
+For enterprise deployments, provide a secrets-provider abstraction for things like Vault/cloud KMS/etc.
+OWASP's current guidance specifically recommends centralized secret management, rotation, encrypted storage and keeping encryption keys separate from the secrets they protect. OWASP Cheat Sheet Series
+So again:
+                    SecretProvider
+
+ Local encrypted store ─┐
+ HashiCorp Vault ────────┤
+ OCI Vault ──────────────┤
+ AWS / Azure / etc. ─────┘
+                         │
+                         ▼
+                     secret_ref
+I would make secret-provider plugins considerably more controlled than ordinary data connectors for the same reason as authentication plugins.
+Configuration history could be a surprisingly killer enterprise feature
+I wouldn't implement:
+UPDATE scene SET config = ...
+and forget what existed before.
+I'd make configuration inherently revisioned.
+Every meaningful mutation generates something like:
+revision: 9281
+timestamp: 2026-08-30T15:42:08Z
+actor: chris
+action: scene.mapping.update
+resource: executive/network-transit
+previous_revision: 9280
+request_id: 81641...
+with:
+Before
+After
+Diff
+Then the UI gives you:
+Configuration → History
+#9281 Chris      Changed rabbit velocity mapping
+#9280 Alice      Added Lumen provider
+#9279 Chris      Changed maintenance event behavior
+#9278 Bob        Broke everything
+#9277 Chris      Working configuration
+Select 9277:
+Restore this revision
+
+But importantly, restore should produce 9282, whose content matches 9277.
+Never delete history.
+That's proper revision semantics.
+Then make snapshots first-class
+I'd distinguish:
+Revision: automatic, every change.
+Snapshot: human-named checkpoint.
+For example:
+"Before Q4 executive review"
+"Production known-good"
+"Before new transit connector"
+A snapshot references the exact revisions of:
+application config
+workspaces
+scenes
+mappings
+connectors
+event rules
+authorization config
+Then rollback can be:
+- one object
+- one workspace
+- whole installation
+That is fucking useful even outside compliance.
+Backup/restore needs to be excellent
+This is one of those features nobody talks about during demos and everybody asks about during an architecture review.
+I'd want:
+crayons backup create
+crayons backup validate foo.backup
+crayons restore --dry-run foo.backup
+crayons restore foo.backup
+Backup package:
+manifest
+database
+configuration
+scene packs
+custom assets
+events
+optional historical data
+encrypted secrets
+checksums
+version information
+And restores should explicitly tell you:
+Backup created with:     1.7.3
+Current version:         1.9.0
+
+Schema migration:        supported
+Scene compatibility:    OK
+Secrets:                 13
+Sources:                 7
+Projects:                22
+
+RESTORE VALIDATION PASSED
+That's how you make the person doing the DR review smile instead of asking increasingly hostile questions.
+Audit should be built as an audit system
+Not merely:
+2026-08-30 user did stuff
+Every meaningful action should record:
+timestamp
+actor
+identity provider
+authentication method
+source address
+session/request ID
+workspace
+resource
+action
+result
+previous revision
+new revision
+correlation ID
+And particularly:
+login success/failure
+MFA enrollment/change
+role changes
+user changes
+connector creation/removal
+secret rotation
+datasource query changes
+scene changes
+annotations
+event API calls
+exports
+backup/restore
+configuration rollback
+plugin installation
+plugin enable/disable
+OWASP explicitly calls out authentication events, authorization failures, administrative actions, configuration modifications, exports and access to sensitive data as things worth audit logging, and recommends tamper detection and centralized collection where appropriate. OWASP Cheat Sheet Series
+So I'd support local audit retention and forwarding:
+JSON file
+syslog
+HTTP
+OTLP logs
+maybe CEF
+Then SOC Guy can dump our own security events straight into their SIEM.
+Which is delightfully recursive.
+Make the audit history tamper-evident
+I wouldn't overengineer blockchain nonsense.
+Something as straightforward as chaining records:
+record_N.hash =
+    H(
+      record_N.contents +
+      record_N-1.hash
+    )
+plus periodic signed checkpoints gives you evidence if historical records were altered or removed.
+And forwarding them externally gives an even stronger independent copy.
+One other feature I think enterprise buyers will appreciate: config-as-code
+Everything configurable in the UI should have a declarative representation.
+So:
+workspace: exec-transit-review
+
+sources:
+  - provider: prometheus
+    ...
+
+scene:
+  template: tortoise-and-hare
+
+mappings:
+  hare.speed:
+    series: transit.arelion.latency
+    preference: lower
+
+events:
+  source: maintenance
+Then:
+crayons config validate scene.yaml
+crayons config diff scene.yaml
+crayons config apply scene.yaml
+Now sophisticated organizations can Git-manage their configuration while Bob still uses drag-and-drop.
+Same product. Different maturity level.
+That philosophy keeps recurring here, and I think it's fundamental to what you're envisioning:
+                     SAME ENGINE
+
+Bob                         SOC Engineer
+
+Upload Excel                OTEL
+Click Sisyphus              mTLS
+Local account               OIDC + YubiKey
+Drag and drop               Config-as-code
+Click Export                API automation
+      │                          │
+      └────────────┬─────────────┘
+                   ▼
+           Animated infographic
+That's compelling.
+And this is where “passes xyz attestation” starts becoming believable
+I would not advertise “SOC 2 compliant”, “FedRAMP ready”, etc. just because we checked some boxes. Those attestations involve processes and organizational controls beyond software features.
+But we can absolutely architect so that the answer to enterprise questionnaires is routinely yes:
+Enterprise question	Product answer
+SSO?	OIDC/LDAP/SAML
+MFA/phishing resistance?	WebAuthn/FIDO2 / IdP
+Client certificate auth?	mTLS
+Local accounts?	Yes
+Strong password storage?	Argon2id / FIPS profile
+RBAC?	Yes, resource scoped
+Service identities?	Yes
+Audit logs?	Yes
+SIEM forwarding?	Yes
+Configuration history?	Immutable revisions
+Rollback?	Yes
+Backup/restore?	Yes + validation
+Secrets encrypted?	Yes
+External vault integration?	Yes
+TLS everywhere?	Yes
+FIPS crypto option?	Go gives us a credible route
+SBOM?	We should ship one
+Signed releases/images?	We should ship them
+Offline deployment?	Absolutely
+Phone-home required?	I would say no
+
+
+That last pair matters considerably for SOC/NOC and regulated customers.
+The application should be perfectly happy on an air-gapped network.
+No Google Fonts.
+No CDN JavaScript.
+No cloud license check every eight minutes.
+No asset calls to some random SaaS domain.
+Scene packs, connector packages, fonts, JS and SVG all local.
+The enterprise customer can optionally run a completely disconnected installation and manually import signed plugin packages.
+That also aligns beautifully with the single-binary Go deployment.
+So I think we've found another architectural principle worth putting in ink:
+The whimsical visualization layer is optional fun. The platform underneath behaves like serious infrastructure software.
+
+That may actually be part of the charm. The security engineer evaluating the product discovers that the application depicting their quarterly availability as Icarus eating vitamins has better change control than half the internal tools they're already running.
+
+
+
+
+Sources 
+
+
+
+
+
+One last requirement and this one may be a doozy but at the crayola level I want to have an expression builder e.g. define source,  define metric, define animation, define boundaries, define animation action , define panel placement, (so wysiwig edit here) define any hooks e.g.  we make an api call to Pagerduty or start blasting alarm sounds or flashing the screen red.  Make sense,  I want low and high levels of entry
+
+
+
+
+
+
+
+
+
+
+
+
+
+Yes. And I think this is actually the feature that ties the whole product together.
+What you're describing is a visual rule/expression builder where the Crayola user and the person writing YAML are manipulating the same underlying object.
+The key design rule I'd adopt is:
+There must never be a “simple mode configuration” and an unrelated “advanced mode configuration.”
+
+The WYSIWYG editor generates the exact same declarative model that the API, YAML, CLI, and config-as-code users manipulate.
+That keeps this from becoming two products duct-taped together.
+The basic expression
+At its heart, every object on the canvas could answer seven questions:
+1. WHERE does my data come from?
+2. WHAT value am I interested in?
+3. HOW should that value be interpreted?
+4. WHAT visual property does it control?
+5. WHAT are the boundaries / thresholds?
+6. WHAT should happen when state changes?
+7. WHAT external actions should occur?
+So Crayola mode might literally look like:
+┌───────────────────────────────────────────┐
+│ DATA                                      │
+│ Source:       Production Prometheus   ▼   │
+│ Metric:       availability            ▼   │
+│                                           │
+│ INTERPRET                                 │
+│ Show:         Current value           ▼   │
+│ Good is:      Higher                  ▼   │
+│ Range:        0 ─────────────── 100       │
+│                                           │
+│ CHARACTER                                 │
+│ Character:    Icarus                  ▼   │
+│ Action:       Altitude                 ▼   │
+│                                           │
+│ BEHAVIOR                                  │
+│ 99.9–100      Fly normally                │
+│ 95–99.9       Wobble                      │
+│ <95           Fall                        │
+│                                           │
+│ EVENT                                     │
+│ During outage: Show ticket bubble         │
+│ During recovery: Take vitamins            │
+│                                           │
+│ ACTIONS                                   │
+│ ☑ Flash screen when <95                   │
+│ ☑ Play alarm when <90                     │
+│ ☐ Send PagerDuty event                    │
+└───────────────────────────────────────────┘
+And beside it:
+Preview
+Icarus is flying around while the user drags a simulated-value slider from 100 down to 0.
+That immediate feedback is incredibly important.
+They shouldn't have to connect Prometheus and break production availability to discover that their animation looks stupid.
+WYSIWYG needs a test/simulation mode
+This might be one of the most useful features.
+Every mapping gets a little:
+TEST VALUE
+
+0 ───────────────●────────────── 100
+                 73
+Drag it.
+Icarus responds.
+Or test:
+Trend:
+↑ Increasing
+↓ Decreasing
+↕ Volatile
+→ Stable
+Or:
+Trigger Event:
+
+[ Outage ] [ Recovery ] [ Maintenance ]
+Now an author can completely develop and validate a scene without having any live datasource connected.
+That also makes template development vastly easier.
+Underneath, it's just declarative configuration
+The Crayola UI above might create:
+binding:
+  id: availability-health
+
+  source:
+    ref: prometheus-prod
+
+  metric:
+    name: availability
+
+  interpretation:
+    operation: value
+    preferred_direction: higher
+    range:
+      min: 0
+      max: 100
+
+  target:
+    object: icarus
+    property: altitude
+
+  states:
+    - when: value >= 99.9
+      animation: fly
+
+    - when: value >= 95
+      animation: wobble
+
+    - when: value < 95
+      animation: fall
+
+  events:
+    outage:
+      animation: panic
+      annotation:
+        field: ticket
+        display: speech-bubble
+
+    recovery:
+      animation: vitamins
+
+  actions:
+    - when: value < 95
+      action: screen.flash
+
+    - when: value < 90
+      action: sound.alarm
+Advanced user hits:
+View YAML
+
+and sees that.
+They can edit it.
+Switch back to visual mode and the editor redraws itself from the YAML.
+That bidirectional relationship is important.
+Then you have an advanced expression language
+A sophisticated user should be able to go beyond:
+value < 95
+and say:
+availability < 99.9
+AND
+rate_of_change(availability, 5m) < -0.5
+AND
+requests_per_second > 50000
+Or:
+entropy(qname_distribution, 60s) >
+baseline_entropy * 1.4
+But the beginner shouldn't need to know any of that exists.
+The visual builder could construct common expressions:
+WHEN
+
+[ Availability             ▼ ]
+[ drops below              ▼ ]
+[ 99.9                     ]
+
+FOR
+
+[ 30 seconds               ]
+
+AND
+
+[ Request Rate             ▼ ]
+[ is greater than          ▼ ]
+[ 50,000                   ]
+Result:
+availability < 99.9 for 30s
+AND requests_rate > 50000
+That's essentially no-code rule building without permanently trapping the user in no-code.
+That's a very important distinction.
+Panel placement fits beautifully
+The canvas should essentially be an SVG scene editor.
+Objects:
+character
+metric label
+annotation
+legend
+background
+image
+shape
+chart
+timeline
+text
+event indicator
+User clicks Icarus.
+Properties appear.
+User drags him.
+Internally:
+layout:
+  object: icarus
+
+  position:
+    x: 0.64
+    y: 0.31
+
+  size:
+    width: 0.12
+
+  anchor: center
+I'd strongly lean toward normalized coordinates rather than raw pixels.
+That lets the same scene render:
+PowerPoint 16:9
+web dashboard
+4K NOC wall
+laptop
+tablet
+portrait infographic
+without everything going to hell.
+Hooks are where we need to get serious
+This is the only part where I would put a hard architectural boundary between:
+Visual actions
+icarus.fall
+screen.flash
+sound.play
+annotation.show
+background.change
+and:
+External actions
+PagerDuty trigger
+webhook
+email
+Slack/Teams
+ServiceNow incident
+custom connector action
+Because this:
+availability < 99.9 → Icarus falls
+is harmless.
+This:
+availability < 99.9 → page 412 engineers
+is considerably less whimsical.
+So outbound hooks should get their own controls.
+I'd give hooks explicit operational semantics
+Something like:
+action:
+  type: webhook
+
+  connector: pagerduty-production
+
+  trigger:
+    when: state == critical
+    for: 60s
+
+  behavior:
+    edge_triggered: true
+    cooldown: 15m
+    deduplicate: true
+
+  recovery:
+    action: resolve
+That gives us:
+- debounce
+- cooldown
+- suppression
+- deduplication
+- recovery actions
+- rate limiting
+- retries
+- timeout
+- failure behavior
+All the boring stuff that prevents:
+Icarus altitude oscillates around 94.999%
+from turning into:
+PagerDuty
+PagerDuty
+PagerDuty
+PagerDuty
+PagerDuty
+PagerDuty
+PagerDuty
+
+Entire SOC:
+ಠ_ಠ
+And I would make actions permissioned separately
+This fits perfectly into the RBAC discussion.
+Maybe:
+scene.view
+scene.edit
+binding.edit
+
+action.local
+action.external
+
+action.pagerduty
+action.webhook
+
+connector.credentials.use
+connector.credentials.manage
+A marketing person can make the screen flash.
+They cannot configure:
+POST arbitrary JSON to https://important-internal-system/admin/delete-everything
+
+And administrators should be able to maintain an outbound destination allowlist.
+That matters tremendously in enterprise environments because otherwise your hooks engine quietly becomes an SSRF appliance.
+External actions should use connectors too
+This gives the marketplace another dimension.
+We've talked about:
+Input connectors
+Prometheus → us
+Graphite → us
+Excel → us
+stock feed → us
+Now there's another category:
+Action connectors
+us → PagerDuty
+us → ServiceNow
+us → Slack
+us → email
+us → generic webhook
+And possibly eventually:
+Bidirectional connectors
+An incident-management connector could:
+ServiceNow incident
+       ↓
+annotation in scene
+
+scene threshold breach
+       ↓
+ServiceNow incident
+Same plugin ecosystem.
+Different declared capabilities.
+The expression builder could eventually be one of the strongest parts of the product
+Think of the progressive complexity:
+Level 0 — Caveman
+Make the rabbit go faster when this number gets bigger.
+
+Done.
+Level 1 — Business user
+Revenue
+Higher is better
+Rabbit speed
+$10M target
+
+Done.
+Level 2 — Analyst
+Use percentage change over trailing seven days.
+
+Done through dropdowns.
+Level 3 — Technical operator
+rate(http_requests_total[5m])
+plus thresholds and events.
+Level 4 — Maniac
+(
+  moving_average(
+    non_negative_rate(requests_total),
+    120s
+  ) / capacity
+) > 0.85
+AND
+entropy(client_distribution, 5m) >
+percentile(entropy_history, 0.95)
+Also fine.
+Same engine.
+That's exactly the mass-market entry model you've been describing.
+There's another thing I'd add: natural-language expression construction
+Not because I think AI should run the product, but because this is a perfect low-risk use for it.
+User types:
+Make the hare run faster as latency improves. If latency exceeds 50ms for more than two minutes, have him pull over and display the active maintenance event. Flash the background if it exceeds 100ms.
+
+The system generates the expression and shows:
+Latency:
+  lower = better
+
+Hare speed:
+  inverse latency
+
+If latency > 50 ms for 2m:
+  animation = pull_over
+  show active event
+
+If latency > 100 ms:
+  screen flash
+Then:
+[Apply]
+The actual execution still happens through deterministic rules.
+That's exactly where I'd want AI: authoring assistance, not runtime decision-making.
+Hooks should also appear on the timeline
+This could be extremely useful historically.
+Imagine replaying:
+10:42:13 availability falls
+10:42:43 critical state entered
+10:42:44 PagerDuty event sent
+10:43:08 INC-84921 attached
+10:47:19 recovery begins
+10:49:02 availability restored
+10:49:03 PagerDuty resolved
+Slide backward and forward.
+You see:
+- metric state
+- character state
+- annotations
+- outbound actions
+That becomes legitimately useful for postmortem analysis, not merely presentation.
+I think the product architecture is settling into about six systems
+┌────────────────────────────────────────────┐
+│                 INPUT                      │
+│                                            │
+│ Excel CSV Raw REST Prom Graphite OTEL ... │
+└───────────────────┬────────────────────────┘
+                    ▼
+┌────────────────────────────────────────────┐
+│           SOURCE / SEMANTIC ENGINE         │
+│                                            │
+│ value rate delta velocity entropy etc.    │
+└───────────────────┬────────────────────────┘
+                    ▼
+┌────────────────────────────────────────────┐
+│           EXPRESSION / RULE ENGINE         │
+│                                            │
+│ when / if / range / duration / threshold  │
+└───────────┬─────────────────────┬──────────┘
+            ▼                     ▼
+┌───────────────────────┐ ┌──────────────────┐
+│     SCENE ENGINE      │ │   ACTION ENGINE  │
+│                       │ │                  │
+│ SVG / animation       │ │ PagerDuty       │
+│ labels / layout       │ │ webhook         │
+│ events / annotations  │ │ sounds          │
+└───────────┬───────────┘ │ etc.             │
+            │             └──────────────────┘
+            ▼
+┌────────────────────────────────────────────┐
+│               TIMELINE                     │
+│                                            │
+│ live / replay / snapshot / export         │
+└────────────────────────────────────────────┘
+Surrounding all of it:
+Identity
+RBAC
+Audit
+Revision control
+Secrets
+Backup/restore
+Plugin management
+That is a pretty respectable platform architecture now.
+And the thing I especially like about the expression builder requirement is that it gives us the missing authoring abstraction.
+Until now, we had:
+data → semantic series → scene
+
+Now we have the actual mechanism by which humans say:
+“When this information behaves like this, make this visual thing behave like that—and optionally do this other thing.”
+
+That's arguably the core language of the entire product. The Crayola UI, YAML, API, natural-language builder, template marketplace and advanced editor should all just be different ways of authoring that same language.
+
+
+
+
+ 
+
+
+
+
+
+Ok now the deep research part. Can you make me:
+A design doc
+An infographic for the workflow
+Architecture diagram (with infographic and plant uml)
+And prompts for my agents to make the la implementation.  
+No big deal :) figure id give you a nice Sunday task.  Thanks
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+2
+
+
+Worked for 6m 23s
+
+
+
+
+
+
+Now the prompts please and maybe a mockup with some db replication data would be cool
+
+
+
+
+
+
+
+
+
+
+
+
+
+Worked for 3m 21s
+
+
+
+
+
+
+
+
+
+Can you give me the prompts in markdown files as well thanks
+
+
+
+
+
+
+
+
+
+
+
+
+
+Done. I split them so you can hand each agent only what it needs, plus the shared contract.
+project-crayons-agent-prompts.zipZIP
+Individual files:
+- 00-shared-implementation-contract.mdMD
+- agent-0-architect-integrator.mdMD
+- agent-1-backend-platform.mdMD
+- agent-2-frontend-scene-engine.mdMD
+- agent-3-source-connectors.mdMD
+- agent-4-security-control-plane.mdMD
+- agent-5-qa-devops-release.mdMD
+- project-crayons-agent-prompts-all-in-one.mdMD
+- README.mdMD
+I’d run Agent 0 first, freeze the canonical models/interfaces/API contracts, then unleash 1–5. Otherwise five enthusiastic agents will independently discover six incompatible definitions of Series.

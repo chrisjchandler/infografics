@@ -1,0 +1,28 @@
+{
+  "image": "icarus-atlas.png",
+  "cell": {
+    "width": 160,
+    "height": 112
+  },
+  "frames_per_state": 8,
+  "states": {
+    "rising": {
+      "row": 0,
+      "fps": 10
+    },
+    "steady": {
+      "row": 1,
+      "fps": 6
+    },
+    "falling": {
+      "row": 2,
+      "fps": 10
+    }
+  },
+  "anchor": {
+    "x": 78,
+    "y": 58,
+    "meaning": "pelvis/chest root"
+  },
+  "provenance": "Original Infograf artwork guided by public-domain Icarus pose studies listed in docs/ASSET_LICENSES.md."
+}

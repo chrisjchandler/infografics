@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Infograf Workflow Infographic</title>
+  <style>
+    :root { color-scheme: dark; --bg:#020617; --panel:rgba(15,23,42,.8); --panel-2:rgba(15,23,42,.94); --line:#1e293b; --cyan:#22d3ee; --emerald:#34d399; --violet:#a78bfa; --amber:#fbbf24; --rose:#fb7185; --text:#e2e8f0; --muted:#94a3b8; --ok:#10b981; --warn:#f59e0b; --crit:#fb7185; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family: ui-sans-serif, system-ui, sans-serif; }
+    .wrap { max-width:1500px; margin:0 auto; padding:26px; }
+    .hero { display:flex; justify-content:space-between; align-items:flex-end; gap:16px; margin-bottom:18px; }
+    .brand { display:flex; align-items:center; gap:10px; }
+    .dot { width:12px; height:12px; border-radius:50%; background:var(--cyan); box-shadow:0 0 18px rgba(34,211,238,.8); }
+    h1 { margin:0; font-size:30px; letter-spacing:-.03em; }
+    .sub { color:var(--muted); margin-top:8px; max-width:1000px; line-height:1.5; }
+    .pill { padding:8px 12px; border-radius:999px; border:1px solid rgba(251,191,36,.35); background:rgba(251,191,36,.08); color:var(--amber); white-space:nowrap; }
+    .layout { display:grid; grid-template-columns: 1.03fr .97fr; gap:16px; }
+    .panel { background:var(--panel); border:1px solid var(--line); border-radius:20px; overflow:hidden; box-shadow:0 12px 40px rgba(2,6,23,.4); }
+    .panel h2 { margin:0; padding:14px 18px; font-size:13px; text-transform:uppercase; letter-spacing:.08em; border-bottom:1px solid var(--line); background:rgba(2,6,23,.25); }
+    .panel-body { padding:18px; }
+    .flow { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+    .step { background:var(--panel-2); border:1px solid var(--line); border-radius:16px; padding:14px; min-height:130px; }
+    .step .n { width:34px; height:34px; border-radius:12px; display:grid; place-items:center; font-weight:700; margin-bottom:10px; background:rgba(34,211,238,.12); color:var(--cyan); }
+    .step h3 { margin:0 0 6px; font-size:14px; }
+    .step p { margin:0; color:var(--muted); font-size:12px; line-height:1.45; }
+    .mock { display:grid; grid-template-rows:auto auto auto; gap:12px; }
+    .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+    .stat { background:var(--panel-2); border:1px solid var(--line); border-radius:14px; padding:12px; }
+    .label { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.08em; }
+    .value { font-size:20px; font-weight:700; margin-top:8px; }
+    .small { color:var(--muted); font-size:12px; margin-top:4px; }
+    .scene { background:linear-gradient(180deg, rgba(2,6,23,.8), rgba(15,23,42,.92)); border:1px solid var(--line); border-radius:18px; padding:16px; }
+    .nodes { display:grid; grid-template-columns:1.15fr repeat(3,1fr); gap:10px; align-items:stretch; }
+    .node { background:rgba(15,23,42,.92); border:1px solid var(--line); border-radius:14px; padding:12px; }
+    .node.primary { border-color:rgba(34,211,238,.35); }
+    .node h4 { margin:0 0 10px; font-size:13px; }
+    .chip { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; font-size:11px; border:1px solid; }
+    .healthy { color:var(--ok); border-color:rgba(16,185,129,.35); background:rgba(16,185,129,.08); }
+    .warning { color:var(--warn); border-color:rgba(245,158,11,.35); background:rgba(245,158,11,.08); }
+    .critical { color:var(--crit); border-color:rgba(251,113,133,.35); background:rgba(251,113,133,.08); }
+    .bar { height:10px; border-radius:999px; background:rgba(148,163,184,.12); overflow:hidden; margin-top:12px; }
+    .bar > span { display:block; height:100%; border-radius:inherit; }
+    .bar.ok span { width:6%; background:var(--ok); }
+    .bar.warn span { width:28%; background:var(--warn); }
+    .bar.crit span { width:84%; background:var(--crit); }
+    .builder { background:rgba(15,23,42,.92); border:1px solid var(--line); border-radius:18px; padding:14px; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; line-height:1.55; }
+    .bottom { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:12px; }
+    .mini { background:rgba(15,23,42,.84); border:1px solid var(--line); border-radius:14px; padding:12px; }
+    .mini h4 { margin:0 0 8px; font-size:13px; }
+    .mini ul { margin:0; padding-left:18px; color:var(--muted); font-size:12px; line-height:1.45; }
+    @media (max-width:1180px) { .layout, .flow, .stats, .nodes, .bottom { grid-template-columns:1fr; } .hero { flex-direction:column; align-items:flex-start; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <div>
+        <div class="brand"><div class="dot"></div><h1>Infograf workflow infographic</h1></div>
+        <div class="sub">A user can start with plain language, a spreadsheet, or a datasource, then turn the same underlying model into a live scene, a replayable timeline, and outbound hooks. This version uses database replication to make the workflow concrete.</div>
+      </div>
+      <div class="pill">mock data: DB replication lag / failover / hooks</div>
+    </div>
+
+    <div class="layout">
+      <section class="panel">
+        <h2>Workflow</h2>
+        <div class="panel-body">
+          <div class="flow">
+            <div class="step"><div class="n">1</div><h3>Ingest</h3><p>Connect Prometheus, Graphite, OTEL, REST, CSV/XLSX, or a plugin connector.</p></div>
+            <div class="step"><div class="n">2</div><h3>Normalize</h3><p>Metrics become canonical values, rates, deltas, lag, and events.</p></div>
+            <div class="step"><div class="n">3</div><h3>Author</h3><p>Use WYSIWYG controls to define source, metric, thresholds, placement, and hooks.</p></div>
+            <div class="step"><div class="n">4</div><h3>Simulate</h3><p>Drag the value slider, trigger events, and verify the scene without live data.</p></div>
+            <div class="step"><div class="n">5</div><h3>Render</h3><p>SVG-first layout composes scene objects with animation cues and annotations.</p></div>
+            <div class="step"><div class="n">6</div><h3>React</h3><p>Local visual effects stay separate from external hooks like PagerDuty or webhooks.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel mock">
+        <h2>DB replication scene mockup</h2>
+        <div class="panel-body mock">
+          <div class="stats">
+            <div class="stat"><div class="label">Cluster</div><div class="value">orders-prod</div><div class="small">Primary + 3 replicas</div></div>
+            <div class="stat"><div class="label">Healthy</div><div class="value">1</div><div class="small">Replica A 8ms</div></div>
+            <div class="stat"><div class="label">Warning</div><div class="value">1</div><div class="small">Replica B 142ms</div></div>
+            <div class="stat"><div class="label">Critical</div><div class="value">1</div><div class="small">Replica C 980ms</div></div>
+          </div>
+
+          <div class="scene">
+            <div class="nodes">
+              <div class="node primary">
+                <h4>Primary node</h4>
+                <div class="chip healthy">● healthy</div>
+                <div class="small">orders-db-primary<br/>heartbeat 5s ago</div>
+                <div class="bar ok"><span></span></div>
+              </div>
+              <div class="node">
+                <h4>Replica A</h4>
+                <div class="chip healthy">● 8ms</div>
+                <div class="small">async replica<br/>fully caught up</div>
+                <div class="bar ok"><span></span></div>
+              </div>
+              <div class="node">
+                <h4>Replica B</h4>
+                <div class="chip warning">● 142ms</div>
+                <div class="small">async replica<br/>late but recoverable</div>
+                <div class="bar warn"><span></span></div>
+              </div>
+              <div class="node">
+                <h4>Replica C</h4>
+                <div class="chip critical">● 980ms</div>
+                <div class="small">async replica<br/>far behind / failover risk</div>
+                <div class="bar crit"><span></span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="builder">
+            <strong>Generated rule</strong><br/>
+            when replica_lag_ms &gt; 100 for 2m → warning state, amber pulse, lag annotation<br/>
+            when replica_lag_ms &gt; 500 for 30s → critical state, red flash, pagerduty.trigger, sound.alarm<br/><br/>
+            <strong>Config round-trip</strong><br/>
+            The GUI edits the same object that the YAML editor, API, and future config-as-code path manipulate.
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="bottom">
+      <div class="mini"><h4>Data model objects</h4><ul><li>Source</li><li>Metric semantics</li><li>Expression</li><li>Scene binding</li><li>Action invocation</li></ul></div>
+      <div class="mini"><h4>Preview controls</h4><ul><li>Value slider</li><li>Trend selector</li><li>Event trigger buttons</li><li>Timeline scrubber</li><li>Replay speed</li></ul></div>
+      <div class="mini"><h4>Hooks</h4><ul><li>Local flash / animation</li><li>Sound alarm</li><li>PagerDuty event</li><li>Generic webhook</li><li>ServiceNow escalation</li></ul></div>
+    </div>
+  </div>
+</body>
+</html>

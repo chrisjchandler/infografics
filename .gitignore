@@ -1,0 +1,66 @@
+# Local Codex/agent state
+.agents/
+.codex/
+
+# Repository-local bootstrapped toolchains and caches
+.tools/
+.cache/
+.tmp/
+tmp/
+temp/
+
+# Go build and test output
+bin/
+*.exe
+*.test
+*.out
+coverage/
+coverage.out
+
+# Frontend dependencies and generated build output
+node_modules/
+frontend/node_modules/
+frontend/dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Runtime data (keep migrations, fixtures, and seed source files elsewhere)
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/*.sqlite
+data/*.sqlite3
+
+# Logs, profiles, traces, and temporary captures
+*.log
+*.pid
+*.prof
+*.pprof
+*.trace
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+
+# Python helper-script caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Editor and OS metadata
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Locally generated scratch visual-review output. Deliberate documentation
+# screenshots under docs/screenshots/ and production assets remain tracked.
+scratch/
+artifacts/
+playwright-report/
+test-results/
