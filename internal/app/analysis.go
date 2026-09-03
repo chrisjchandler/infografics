@@ -46,9 +46,12 @@ func (s *Server) handleMetricAnalysis(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) analyzeMetric(ctx context.Context, series model.CanonicalSeries) (metricAnalysisResponse, error) {
-	modelName, baseURL, authToken := "", "", ""
+	provider, modelName, baseURL, authToken := "ollama", "", "", ""
 	if cfg, err := s.store.GetConfig(ctx); err == nil {
-		modelName, baseURL, authToken = cfg.AI.Model, cfg.AI.URL, cfg.AI.AuthToken
+		provider, modelName, baseURL, authToken = cfg.AI.Provider, cfg.AI.Model, cfg.AI.URL, cfg.AI.AuthToken
+	}
+	if provider == "" {
+		provider = "ollama"
 	}
 	if value := strings.TrimSpace(os.Getenv("INFOGRAF_AI_MODEL")); value != "" {
 		modelName = value
@@ -67,14 +70,31 @@ func (s *Server) analyzeMetric(ctx context.Context, series model.CanonicalSeries
 		return metricAnalysisResponse{Summary: localMetricSummary(series), Provider: "local", Model: "deterministic"}, nil
 	}
 	prompt := metricPrompt(series)
-	body, _ := json.Marshal(map[string]any{"model": modelName, "prompt": prompt, "stream": false})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/api/generate", bytes.NewReader(body))
+	var endpoint string
+	var requestBody any
+	switch provider {
+	case "openai":
+		endpoint = baseURL + "/v1/chat/completions"
+		requestBody = map[string]any{"model": modelName, "messages": []map[string]string{{"role": "user", "content": prompt}}, "temperature": 0.2}
+	case "anthropic":
+		endpoint = baseURL + "/v1/messages"
+		requestBody = map[string]any{"model": modelName, "max_tokens": 300, "messages": []map[string]string{{"role": "user", "content": prompt}}}
+	default:
+		endpoint = baseURL + "/api/generate"
+		requestBody = map[string]any{"model": modelName, "prompt": prompt, "stream": false}
+	}
+	body, _ := json.Marshal(requestBody)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return metricAnalysisResponse{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if strings.TrimSpace(authToken) != "" {
 		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(authToken))
+	}
+	if provider == "anthropic" {
+		req.Header.Set("x-api-key", strings.TrimSpace(authToken))
+		req.Header.Set("anthropic-version", "2023-06-01")
 	}
 	client := &http.Client{Timeout: 20 * time.Second}
 	resp, err := client.Do(req)
@@ -87,14 +107,28 @@ func (s *Server) analyzeMetric(ctx context.Context, series model.CanonicalSeries
 	}
 	var output struct {
 		Response string `json:"response"`
+		Choices  []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+		Content []struct {
+			Text string `json:"text"`
+		} `json:"content"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&output); err != nil {
 		return metricAnalysisResponse{}, err
 	}
+	if output.Response == "" && len(output.Choices) > 0 {
+		output.Response = output.Choices[0].Message.Content
+	}
+	if output.Response == "" && len(output.Content) > 0 {
+		output.Response = output.Content[0].Text
+	}
 	if strings.TrimSpace(output.Response) == "" {
 		return metricAnalysisResponse{}, fmt.Errorf("AI endpoint returned an empty response")
 	}
-	return metricAnalysisResponse{Summary: strings.TrimSpace(output.Response), Provider: "ollama", Model: modelName}, nil
+	return metricAnalysisResponse{Summary: strings.TrimSpace(output.Response), Provider: provider, Model: modelName}, nil
 }
 
 func metricPrompt(series model.CanonicalSeries) string {

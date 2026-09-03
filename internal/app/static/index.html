@@ -492,9 +492,10 @@
 
           <section class="section">
             <h3>AI analysis</h3>
-            <div class="field"><label for="ai-url">Ollama / AI endpoint</label><input id="ai-url" type="url" placeholder="http://127.0.0.1:11434"></div>
-            <div class="two"><div class="field"><label for="ai-model">Model</label><input id="ai-model" type="text" value="llama3.2:3b"></div><div class="field"><label for="ai-token">Auth token</label><input id="ai-token" type="password" autocomplete="off" placeholder="optional"></div></div>
-            <div class="footnote">Leave the endpoint blank for deterministic local summaries. Environment variables <span class="mono">INFOGRAF_AI_URL</span>, <span class="mono">INFOGRAF_AI_MODEL</span>, and <span class="mono">INFOGRAF_AI_AUTH_TOKEN</span> override these values.</div>
+            <div class="two"><div class="field"><label for="ai-provider">Provider</label><select id="ai-provider"><option value="ollama">Ollama / local Llama</option><option value="openai">OpenAI / ChatGPT</option><option value="anthropic">Anthropic / Claude</option></select></div><div class="field"><label for="ai-auth-method">Authentication</label><select id="ai-auth-method"><option value="none">None (local)</option><option value="api_token">API token</option><option value="oauth">OAuth access token</option></select></div></div>
+            <div class="field"><label for="ai-url">Provider endpoint</label><input id="ai-url" type="url" placeholder="https://api.openai.com"></div>
+            <div class="two"><div class="field"><label for="ai-model">Model</label><input id="ai-model" type="text" value="llama3.2:3b"></div><div class="field"><label for="ai-token">API / OAuth token</label><input id="ai-token" type="password" autocomplete="off" placeholder="paste token"></div></div>
+            <div class="footnote">Choose a provider, endpoint, model, and token here. OAuth mode accepts a provider-issued access token; a full browser OAuth consent flow is deployment-specific. Blank local settings use deterministic summaries. Environment variables override these values.</div>
           </section>
 
           <section class="section">
@@ -713,6 +714,8 @@
       $("storage-path").value = state.config.storage?.path || "data/infograf.db";
       $("storage-retention").value = String(state.config.storage?.retention_days ?? 30);
       $("ai-url").value = state.config.ai?.url || "";
+      $("ai-provider").value = state.config.ai?.provider || "ollama";
+      $("ai-auth-method").value = state.config.ai?.auth_method || "none";
       $("ai-model").value = state.config.ai?.model || "llama3.2:3b";
       $("ai-token").value = state.config.ai?.auth_token || "";
       if (!$("dashboard-title").value) {
@@ -1166,7 +1169,7 @@
             retention_days: Math.max(0, Number($("storage-retention").value || 30)),
             wal: true,
           },
-          ai: { url: $("ai-url").value.trim(), model: $("ai-model").value.trim() || "llama3.2:3b", auth_token: $("ai-token").value.trim() },
+          ai: { provider: $("ai-provider").value, auth_method: $("ai-auth-method").value, url: $("ai-url").value.trim(), model: $("ai-model").value.trim() || "llama3.2:3b", auth_token: $("ai-token").value.trim() },
           revision: 0,
         }),
       });

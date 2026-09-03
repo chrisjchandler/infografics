@@ -28,9 +28,11 @@ type AppConfig struct {
 }
 
 type AIConfig struct {
-	URL       string `json:"url"`
-	Model     string `json:"model"`
-	AuthToken string `json:"auth_token,omitempty"`
+	Provider   string `json:"provider"`
+	AuthMethod string `json:"auth_method"`
+	URL        string `json:"url"`
+	Model      string `json:"model"`
+	AuthToken  string `json:"auth_token,omitempty"`
 }
 
 // StorageConfig keeps the control-plane datastore explicit and deployable.

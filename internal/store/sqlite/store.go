@@ -105,7 +105,7 @@ func (s *Store) seed(ctx context.Context) error {
 			WorkspaceName: "Operations",
 			Theme:         "dark",
 			Storage:       model.StorageConfig{Backend: "sqlite", Path: "data/infograf.db", RetentionDays: 30, WAL: true},
-			AI:            model.AIConfig{Model: "llama3.2:3b"},
+			AI:            model.AIConfig{Provider: "ollama", AuthMethod: "none", Model: "llama3.2:3b"},
 			Revision:      1,
 			UpdatedAt:     time.Now().UTC(),
 		}
@@ -174,6 +174,18 @@ func (s *Store) putConfigTx(ctx context.Context, cfg model.AppConfig, silent boo
 	}
 	if strings.TrimSpace(cfg.AI.Model) == "" {
 		cfg.AI.Model = "llama3.2:3b"
+	}
+	if strings.TrimSpace(cfg.AI.Provider) == "" {
+		cfg.AI.Provider = "ollama"
+	}
+	if strings.TrimSpace(cfg.AI.AuthMethod) == "" {
+		cfg.AI.AuthMethod = "none"
+	}
+	if cfg.AI.Provider != "ollama" && cfg.AI.Provider != "openai" && cfg.AI.Provider != "anthropic" {
+		return model.AppConfig{}, fmt.Errorf("unsupported AI provider %q", cfg.AI.Provider)
+	}
+	if cfg.AI.AuthMethod != "none" && cfg.AI.AuthMethod != "api_token" && cfg.AI.AuthMethod != "oauth" {
+		return model.AppConfig{}, fmt.Errorf("unsupported AI auth method %q", cfg.AI.AuthMethod)
 	}
 	cfg.UpdatedAt = time.Now().UTC()
 	if cfg.Revision == 0 {
