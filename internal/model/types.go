@@ -28,11 +28,16 @@ type AppConfig struct {
 }
 
 type AIConfig struct {
-	Provider   string `json:"provider"`
-	AuthMethod string `json:"auth_method"`
-	URL        string `json:"url"`
-	Model      string `json:"model"`
-	AuthToken  string `json:"auth_token,omitempty"`
+	Provider              string `json:"provider"`
+	AuthMethod            string `json:"auth_method"`
+	URL                   string `json:"url"`
+	Model                 string `json:"model"`
+	AuthToken             string `json:"auth_token,omitempty"`
+	OAuthAuthorizationURL string `json:"oauth_authorization_url,omitempty"`
+	OAuthTokenURL         string `json:"oauth_token_url,omitempty"`
+	OAuthClientID         string `json:"oauth_client_id,omitempty"`
+	OAuthScopes           string `json:"oauth_scopes,omitempty"`
+	OAuthRedirectURI      string `json:"oauth_redirect_uri,omitempty"`
 }
 
 // StorageConfig keeps the control-plane datastore explicit and deployable.

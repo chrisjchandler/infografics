@@ -173,6 +173,10 @@ Without an AI URL, the action returns a clearly labeled deterministic local summ
 
 Configure → Expression Builder includes templates for the native Infografics expression format, Power BI DAX/Power Query, and Salesforce SOQL. These templates describe how to map a metric and time range into each system while keeping the scene binding datasource-agnostic; credentials and vendor queries remain deployment-specific.
 
+### OAuth placeholders
+
+The AI panel also stores OAuth registration placeholders: authorization URL, token URL, client ID, scopes, and redirect URI. The disabled **Connect provider** control deliberately marks the consent flow as pending deployment-specific PKCE/state implementation; no credentials are sent until a provider registration and callback handler are configured.
+
 ## Datastore configuration
 
 Configure persists this declaration:
