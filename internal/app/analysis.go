@@ -37,7 +37,7 @@ func (s *Server) handleMetricAnalysis(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid analysis input", "series.metric_name and series.points are required", "bad_request")
 		return
 	}
-	result, err := analyzeMetric(r.Context(), input.Series)
+	result, err := s.analyzeMetric(r.Context(), input.Series)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "analysis provider failed", err.Error(), "analysis_error")
 		return
@@ -45,12 +45,24 @@ func (s *Server) handleMetricAnalysis(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
-func analyzeMetric(ctx context.Context, series model.CanonicalSeries) (metricAnalysisResponse, error) {
-	modelName := strings.TrimSpace(os.Getenv("INFOGRAF_AI_MODEL"))
+func (s *Server) analyzeMetric(ctx context.Context, series model.CanonicalSeries) (metricAnalysisResponse, error) {
+	modelName, baseURL, authToken := "", "", ""
+	if cfg, err := s.store.GetConfig(ctx); err == nil {
+		modelName, baseURL, authToken = cfg.AI.Model, cfg.AI.URL, cfg.AI.AuthToken
+	}
+	if value := strings.TrimSpace(os.Getenv("INFOGRAF_AI_MODEL")); value != "" {
+		modelName = value
+	}
+	if value := strings.TrimSpace(os.Getenv("INFOGRAF_AI_URL")); value != "" {
+		baseURL = value
+	}
+	if value := strings.TrimSpace(os.Getenv("INFOGRAF_AI_AUTH_TOKEN")); value != "" {
+		authToken = value
+	}
 	if modelName == "" {
 		modelName = "llama3.2:3b"
 	}
-	baseURL := strings.TrimRight(strings.TrimSpace(os.Getenv("INFOGRAF_AI_URL")), "/")
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if baseURL == "" {
 		return metricAnalysisResponse{Summary: localMetricSummary(series), Provider: "local", Model: "deterministic"}, nil
 	}
@@ -61,6 +73,9 @@ func analyzeMetric(ctx context.Context, series model.CanonicalSeries) (metricAna
 		return metricAnalysisResponse{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if strings.TrimSpace(authToken) != "" {
+		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(authToken))
+	}
 	client := &http.Client{Timeout: 20 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {

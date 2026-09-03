@@ -105,6 +105,7 @@ func (s *Store) seed(ctx context.Context) error {
 			WorkspaceName: "Operations",
 			Theme:         "dark",
 			Storage:       model.StorageConfig{Backend: "sqlite", Path: "data/infograf.db", RetentionDays: 30, WAL: true},
+			AI:            model.AIConfig{Model: "llama3.2:3b"},
 			Revision:      1,
 			UpdatedAt:     time.Now().UTC(),
 		}
@@ -170,6 +171,9 @@ func (s *Store) putConfigTx(ctx context.Context, cfg model.AppConfig, silent boo
 	}
 	if cfg.Storage.RetentionDays < 0 {
 		return model.AppConfig{}, fmt.Errorf("storage retention_days cannot be negative")
+	}
+	if strings.TrimSpace(cfg.AI.Model) == "" {
+		cfg.AI.Model = "llama3.2:3b"
 	}
 	cfg.UpdatedAt = time.Now().UTC()
 	if cfg.Revision == 0 {

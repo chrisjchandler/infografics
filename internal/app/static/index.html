@@ -491,6 +491,13 @@
           </section>
 
           <section class="section">
+            <h3>AI analysis</h3>
+            <div class="field"><label for="ai-url">Ollama / AI endpoint</label><input id="ai-url" type="url" placeholder="http://127.0.0.1:11434"></div>
+            <div class="two"><div class="field"><label for="ai-model">Model</label><input id="ai-model" type="text" value="llama3.2:3b"></div><div class="field"><label for="ai-token">Auth token</label><input id="ai-token" type="password" autocomplete="off" placeholder="optional"></div></div>
+            <div class="footnote">Leave the endpoint blank for deterministic local summaries. Environment variables <span class="mono">INFOGRAF_AI_URL</span>, <span class="mono">INFOGRAF_AI_MODEL</span>, and <span class="mono">INFOGRAF_AI_AUTH_TOKEN</span> override these values.</div>
+          </section>
+
+          <section class="section">
             <h3>Connectors</h3>
             <div class="field">
               <label for="graphite-source">Live Graphite source</label>
@@ -705,6 +712,9 @@
       $("storage-backend").value = state.config.storage?.backend || "sqlite";
       $("storage-path").value = state.config.storage?.path || "data/infograf.db";
       $("storage-retention").value = String(state.config.storage?.retention_days ?? 30);
+      $("ai-url").value = state.config.ai?.url || "";
+      $("ai-model").value = state.config.ai?.model || "llama3.2:3b";
+      $("ai-token").value = state.config.ai?.auth_token || "";
       if (!$("dashboard-title").value) {
         $("dashboard-title").value = `${state.config.workspace_name || "Operations"} live studio`;
       }
@@ -1156,6 +1166,7 @@
             retention_days: Math.max(0, Number($("storage-retention").value || 30)),
             wal: true,
           },
+          ai: { url: $("ai-url").value.trim(), model: $("ai-model").value.trim() || "llama3.2:3b", auth_token: $("ai-token").value.trim() },
           revision: 0,
         }),
       });

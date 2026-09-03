@@ -12,18 +12,25 @@ type HealthResponse struct {
 }
 
 type ErrorResponse struct {
-	Error   string `json:"error"`
-	Detail  string `json:"detail,omitempty"`
-	Code    string `json:"code,omitempty"`
+	Error  string `json:"error"`
+	Detail string `json:"detail,omitempty"`
+	Code   string `json:"code,omitempty"`
 }
 
 type AppConfig struct {
-	ProductName   string    `json:"product_name"`
-	WorkspaceName string    `json:"workspace_name"`
-	Theme         string    `json:"theme"`
+	ProductName   string        `json:"product_name"`
+	WorkspaceName string        `json:"workspace_name"`
+	Theme         string        `json:"theme"`
 	Storage       StorageConfig `json:"storage"`
-	Revision      int64     `json:"revision"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	AI            AIConfig      `json:"ai"`
+	Revision      int64         `json:"revision"`
+	UpdatedAt     time.Time     `json:"updated_at"`
+}
+
+type AIConfig struct {
+	URL       string `json:"url"`
+	Model     string `json:"model"`
+	AuthToken string `json:"auth_token,omitempty"`
 }
 
 // StorageConfig keeps the control-plane datastore explicit and deployable.
