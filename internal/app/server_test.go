@@ -40,6 +40,29 @@ func TestAdaptSourceSupportsEquivalentSimpleInputs(t *testing.T) {
 	}
 }
 
+func TestMetricAnalysisUsesDeterministicLocalProvider(t *testing.T) {
+	t.Setenv("INFOGRAF_AI_URL", "")
+	server, err := New(Options{DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+	defer server.Close()
+	body := `{"series":{"metric_name":"queue_depth","semantics":{"unit":"jobs"},"points":[{"timestamp":"2026-09-02T12:00:00Z","value":2},{"timestamp":"2026-09-02T12:01:00Z","value":7}]}}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/analysis", bytes.NewBufferString(body))
+	res := httptest.NewRecorder()
+	server.mux.ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("analysis status = %d, body=%s", res.Code, res.Body.String())
+	}
+	var result metricAnalysisResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode analysis: %v", err)
+	}
+	if result.Provider != "local" || result.Summary == "" {
+		t.Fatalf("unexpected analysis: %#v", result)
+	}
+}
+
 func TestServerAPIFlow(t *testing.T) {
 	t.Parallel()
 

@@ -191,6 +191,7 @@
       .graph-card-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; flex-wrap: wrap; margin-bottom: 4px; }
       .graph-card-head span { color: #67717c; font: 12px var(--mono); overflow-wrap: anywhere; }
       .graph-card svg { display: block; width: 100%; height: auto; }
+      .analysis-summary { margin-top: 8px; padding: 10px 12px; border-left: 3px solid #2f5f98; border-radius: 8px; background: rgba(47,95,152,.08); color: #344454; font-size: 13px; line-height: 1.45; }
       [contenteditable="true"] { cursor: text; border-radius: 8px; outline: 1px dashed transparent; }
       [contenteditable="true"]:hover, [contenteditable="true"]:focus { outline-color: rgba(47,95,152,.45); background: rgba(255,255,255,.55); }
     .metric-card { min-width: 0; overflow-wrap: anywhere; }
@@ -536,6 +537,14 @@
           <section class="section">
             <h3>Beginner Builder</h3>
             <div class="field">
+              <label for="expr-integration">Integration expression format</label>
+              <select id="expr-integration">
+                <option value="generic" selected>Infografics expression</option>
+                <option value="powerbi">Power BI · DAX / Power Query</option>
+                <option value="salesforce">Salesforce · SOQL</option>
+              </select>
+            </div>
+            <div class="field">
               <label for="expr-metric">When metric</label>
               <input id="expr-metric" type="text" list="metric-options">
             </div>
@@ -595,6 +604,7 @@
       currentFrameIndex: 0,
       playbackTimer: null,
       selectedSceneID: "",
+      analyses: {},
       dashboardSubtitle: "Timestamped values determine the scene position, trend state, and replay frame; Configure manages discovery and authoring.",
       motionProfile: "metric",
     };
@@ -1007,9 +1017,22 @@
             <text x="462" y="262" fill="#67717c" font-size="14" text-anchor="middle">Time →</text>
             <text x="18" y="150" fill="#67717c" font-size="14" transform="rotate(-90 18 150)">Value</text>
           </svg>
+          <div class="button-row" style="justify-content:start"><button data-analyze-index="${index}">Analyze with AI</button></div>
+          <div class="analysis-summary" id="analysis-${index}">${state.analyses[series.metric_name] ? `<strong>${safe(state.analyses[series.metric_name].provider)} analysis</strong><br>${safe(state.analyses[series.metric_name].summary)}` : ""}</div>
         </article>`;
       }).join("");
       tooltipHandlers($("graph-gallery"));
+      $("graph-gallery").querySelectorAll("button[data-analyze-index]").forEach((button) => button.addEventListener("click", () => analyzeGraph(Number(button.dataset.analyzeIndex))));
+    }
+
+    async function analyzeGraph(index) {
+      const series = state.sceneResponse?.series?.[index]; if (!series) return;
+      const target = $(`analysis-${index}`); target.textContent = "Analyzing metric…";
+      try {
+        const result = await fetchJSON("/api/v1/analysis", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ series }) });
+        state.analyses[series.metric_name] = result;
+        target.innerHTML = `<strong>${safe(result.provider)} analysis</strong><br>${safe(result.summary)}`;
+      } catch (error) { target.textContent = `Analysis unavailable: ${error.message}`; }
     }
 
     function renderMetricsAndNotes() {
@@ -1062,11 +1085,16 @@
       const threshold = $("expr-threshold").value.trim() || "10";
       const duration = $("expr-duration").value.trim() || "30s";
       const action = $("expr-action").value;
+      const integration = $("expr-integration").value;
+      const integrationHint = integration === "powerbi" ? "# Power BI: map metric to a DAX measure or Power Query column" : integration === "salesforce" ? "# Salesforce: map metric to a SOQL numeric/date field" : "# Infografics canonical expression";
+      const integrationLines = integration === "powerbi" ? ["  adapter: powerbi", "  expression: CALCULATE([MetricValue], DATESINPERIOD('Calendar'[Date], MAX('Calendar'[Date]), -1, HOUR))"] : integration === "salesforce" ? ["  adapter: salesforce", "  expression: SELECT MetricValue__c, Timestamp__c FROM Telemetry__c WHERE Name = '" + metric + "' ORDER BY Timestamp__c ASC"] : [];
       $("yaml-editor").value = [
+        integrationHint,
         "binding:",
         `  id: ${state.selectedPreset}-${(metric.split(".").pop() || "metric").replace(/[^a-zA-Z0-9_]+/g, "-")}`,
         "  source:",
         `    ref: graphite-live`,
+        ...integrationLines,
         "  metric:",
         `    name: ${metric}`,
         "  axes:",
@@ -1277,6 +1305,7 @@
       $("expr-threshold").addEventListener("input", updateYamlEditor);
       $("expr-duration").addEventListener("input", updateYamlEditor);
       $("expr-action").addEventListener("change", updateYamlEditor);
+      $("expr-integration").addEventListener("change", updateYamlEditor);
       $("dashboard-title").addEventListener("input", () => { $("studio-heading").value = $("dashboard-title").value; renderAll(); });
       $("studio-heading").addEventListener("input", () => { $("dashboard-title").value = $("studio-heading").value; renderAll(); });
       $("studio-subtext").addEventListener("input", () => { state.dashboardSubtitle = $("studio-subtext").value; renderAll(); });

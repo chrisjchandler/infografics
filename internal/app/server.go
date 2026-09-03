@@ -84,6 +84,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/v1/scenes/", s.handleSceneByID)
 	s.mux.HandleFunc("/api/v1/revisions", s.handleRevisions)
 	s.mux.HandleFunc("/api/v1/sources/adapt", s.handleAdaptSource)
+	s.mux.HandleFunc("/api/v1/analysis", s.handleMetricAnalysis)
 	s.mux.HandleFunc("/", s.handleIndex)
 }
 

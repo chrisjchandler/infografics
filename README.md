@@ -157,6 +157,22 @@ Select both host metrics in one dashboard to compare them over the same playback
 
 The animated stage uses the primary metric for character motion. The graph gallery renders every selected series with its own unit, value scale, time axis, and synchronized playback cursor, avoiding misleading mixed-unit overlays.
 
+### AI metric analysis
+
+Each graph has an **Analyze with AI** action. The backend sends a bounded sample window to an Ollama-compatible `/api/generate` endpoint when `INFOGRAF_AI_URL` is configured:
+
+```bash
+INFOGRAF_AI_URL=http://127.0.0.1:11434 \
+INFOGRAF_AI_MODEL=llama3.2:3b \
+go run ./cmd/infograf
+```
+
+Without an AI URL, the action returns a clearly labeled deterministic local summary; no network call is made. The endpoint is `POST /api/v1/analysis` and accepts `{ "series": ... }` using the same canonical series contract.
+
+### Integration expression builders
+
+Configure → Expression Builder includes templates for the native Infografics expression format, Power BI DAX/Power Query, and Salesforce SOQL. These templates describe how to map a metric and time range into each system while keeping the scene binding datasource-agnostic; credentials and vendor queries remain deployment-specific.
+
 ## Datastore configuration
 
 Configure persists this declaration:
