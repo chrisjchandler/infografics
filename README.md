@@ -164,10 +164,13 @@ Each graph has an **Analyze with AI** action. The backend sends a bounded sample
 ```bash
 INFOGRAF_AI_URL=http://127.0.0.1:11434 \
 INFOGRAF_AI_MODEL=llama3.2:3b \
+INFOGRAF_AI_TIMEOUT_SECONDS=120 \
 go run ./cmd/infograf
 ```
 
 Without an AI URL, the action returns a clearly labeled deterministic local summary; no network call is made. The endpoint is `POST /api/v1/analysis` and accepts `{ "series": ... }` using the same canonical series contract.
+
+Local models may take longer to emit the first response. The provider timeout defaults to 120 seconds and can be adjusted with `INFOGRAF_AI_TIMEOUT_SECONDS`.
 
 AI analysis can be disabled in Configure. When disabled, the graph cards remove their **Analyze with AI** actions and the backend refuses analysis requests. The provider list also includes a generic OpenAI-compatible endpoint for local gateways and hosted models that expose `/v1/chat/completions`; use that option when you do not want a vendor-specific integration.
 

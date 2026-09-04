@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -103,7 +104,13 @@ func (s *Server) analyzeMetric(ctx context.Context, series model.CanonicalSeries
 		req.Header.Set("x-api-key", strings.TrimSpace(authToken))
 		req.Header.Set("anthropic-version", "2023-06-01")
 	}
-	client := &http.Client{Timeout: 20 * time.Second}
+	timeout := 120 * time.Second
+	if raw := strings.TrimSpace(os.Getenv("INFOGRAF_AI_TIMEOUT_SECONDS")); raw != "" {
+		if seconds, err := strconv.Atoi(raw); err == nil && seconds > 0 {
+			timeout = time.Duration(seconds) * time.Second
+		}
+	}
+	client := &http.Client{Timeout: timeout}
 	resp, err := client.Do(req)
 	if err != nil {
 		return metricAnalysisResponse{}, err
