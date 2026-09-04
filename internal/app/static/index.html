@@ -767,7 +767,7 @@
 
     function syncOAuthControls() {
       const enabled = $("ai-oauth-enabled").checked;
-      ["ai-auth-method", "ai-oauth-auth-url", "ai-oauth-token-url", "ai-oauth-client", "ai-oauth-scopes", "ai-oauth-redirect"].forEach((id) => { $(id).disabled = !enabled; });
+      ["ai-oauth-auth-url", "ai-oauth-token-url", "ai-oauth-client", "ai-oauth-scopes", "ai-oauth-redirect"].forEach((id) => { $(id).disabled = !enabled; });
       $("ai-token").placeholder = enabled ? "paste API/OAuth token" : "optional API token";
     }
 
@@ -1213,7 +1213,7 @@
             retention_days: Math.max(0, Number($("storage-retention").value || 30)),
             wal: true,
           },
-          ai: { enabled: $("ai-enabled").checked, provider: $("ai-provider").value, auth_method: $("ai-oauth-enabled").checked ? $("ai-auth-method").value : "none", oauth_enabled: $("ai-oauth-enabled").checked, url: $("ai-url").value.trim(), model: $("ai-model").value.trim() || "llama3.2:3b", auth_token: $("ai-token").value.trim(), oauth_authorization_url: $("ai-oauth-auth-url").value.trim(), oauth_token_url: $("ai-oauth-token-url").value.trim(), oauth_client_id: $("ai-oauth-client").value.trim(), oauth_scopes: $("ai-oauth-scopes").value.trim(), oauth_redirect_uri: $("ai-oauth-redirect").value.trim() },
+          ai: { enabled: $("ai-enabled").checked, provider: $("ai-provider").value, auth_method: $("ai-auth-method").value, oauth_enabled: $("ai-oauth-enabled").checked, url: $("ai-url").value.trim(), model: $("ai-model").value.trim() || "llama3.2:3b", auth_token: $("ai-token").value.trim(), oauth_authorization_url: $("ai-oauth-auth-url").value.trim(), oauth_token_url: $("ai-oauth-token-url").value.trim(), oauth_client_id: $("ai-oauth-client").value.trim(), oauth_scopes: $("ai-oauth-scopes").value.trim(), oauth_redirect_uri: $("ai-oauth-redirect").value.trim() },
           revision: 0,
         }),
       });
