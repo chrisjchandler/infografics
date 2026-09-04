@@ -40,6 +40,15 @@ func TestOpenSeedAndRoundTrip(t *testing.T) {
 	if err != nil || updated.Storage.RetentionDays != 7 || updated.Storage.Path != "data/custom.db" {
 		t.Fatalf("storage round trip: %#v %v", updated.Storage, err)
 	}
+	cfg.AI.Provider, cfg.AI.AuthMethod, cfg.AI.Enabled = "generic", "api_token", true
+	cfg.AI.URL, cfg.AI.Model, cfg.AI.AuthToken = "http://foo.bar/v1/models", "llama-3.2-3b-instruct-q4_k_m", "openclaw-local"
+	if _, err := st.PutConfig(ctx, cfg); err != nil {
+		t.Fatalf("generic AI config: %v", err)
+	}
+	aiCfg, err := st.GetConfig(ctx)
+	if err != nil || aiCfg.AI.Provider != "generic" || aiCfg.AI.Model != "llama-3.2-3b-instruct-q4_k_m" {
+		t.Fatalf("AI config round trip: %#v %v", aiCfg.AI, err)
+	}
 	scenes, err := st.ListScenes(ctx)
 	if err != nil {
 		t.Fatalf("list scenes: %v", err)

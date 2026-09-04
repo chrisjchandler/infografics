@@ -184,7 +184,7 @@ func (s *Store) putConfigTx(ctx context.Context, cfg model.AppConfig, silent boo
 	if strings.TrimSpace(cfg.AI.AuthMethod) == "" {
 		cfg.AI.AuthMethod = "none"
 	}
-	if cfg.AI.Provider != "ollama" && cfg.AI.Provider != "openai" && cfg.AI.Provider != "anthropic" {
+	if cfg.AI.Provider != "ollama" && cfg.AI.Provider != "generic" && cfg.AI.Provider != "openai" && cfg.AI.Provider != "anthropic" {
 		return model.AppConfig{}, fmt.Errorf("unsupported AI provider %q", cfg.AI.Provider)
 	}
 	if cfg.AI.AuthMethod != "none" && cfg.AI.AuthMethod != "api_token" && cfg.AI.AuthMethod != "oauth" {
