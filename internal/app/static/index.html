@@ -494,7 +494,8 @@
 
           <section class="section">
             <h3>AI analysis</h3>
-            <div class="two"><div class="field"><label for="ai-provider">Provider</label><select id="ai-provider"><option value="ollama">Ollama / local Llama</option><option value="openai">OpenAI / ChatGPT</option><option value="anthropic">Anthropic / Claude</option></select></div><div class="field"><label for="ai-auth-method">Authentication</label><select id="ai-auth-method"><option value="none">None (local)</option><option value="api_token">API token</option><option value="oauth">OAuth access token</option></select></div></div>
+            <label class="checkbox"><input id="ai-enabled" type="checkbox" checked> Enable AI analysis</label>
+            <div class="two"><div class="field"><label for="ai-provider">Provider</label><select id="ai-provider"><option value="ollama">Ollama / local Llama</option><option value="generic">Generic OpenAI-compatible endpoint</option><option value="openai">OpenAI / ChatGPT</option><option value="anthropic">Anthropic / Claude</option></select></div><div class="field"><label for="ai-auth-method">Authentication</label><select id="ai-auth-method"><option value="none">None (local)</option><option value="api_token">API token</option><option value="oauth">OAuth access token</option></select></div></div>
             <label class="checkbox"><input id="ai-oauth-enabled" type="checkbox"> Enable OAuth configuration</label>
             <div class="field"><label for="ai-url">Provider endpoint</label><input id="ai-url" type="url" placeholder="https://api.openai.com"></div>
             <div class="two"><div class="field"><label for="ai-model">Model</label><input id="ai-model" type="text" value="llama3.2:3b"></div><div class="field"><label for="ai-token">API / OAuth token</label><input id="ai-token" type="password" autocomplete="off" placeholder="paste token"></div></div>
@@ -721,6 +722,7 @@
       $("storage-retention").value = String(state.config.storage?.retention_days ?? 30);
       $("ai-url").value = state.config.ai?.url || "";
       $("ai-provider").value = state.config.ai?.provider || "ollama";
+      $("ai-enabled").checked = state.config.ai?.enabled !== false;
       $("ai-auth-method").value = state.config.ai?.auth_method || "none";
       $("ai-oauth-enabled").checked = state.config.ai?.oauth_enabled === true;
       $("ai-model").value = state.config.ai?.model || "llama3.2:3b";
@@ -731,6 +733,7 @@
       $("ai-oauth-scopes").value = state.config.ai?.oauth_scopes || "";
       $("ai-oauth-redirect").value = state.config.ai?.oauth_redirect_uri || "";
       syncOAuthControls();
+      syncAIControls();
       if (!$("dashboard-title").value) {
         $("dashboard-title").value = `${state.config.workspace_name || "Operations"} live studio`;
       }
@@ -766,6 +769,13 @@
       const enabled = $("ai-oauth-enabled").checked;
       ["ai-auth-method", "ai-oauth-auth-url", "ai-oauth-token-url", "ai-oauth-client", "ai-oauth-scopes", "ai-oauth-redirect"].forEach((id) => { $(id).disabled = !enabled; });
       $("ai-token").placeholder = enabled ? "paste API/OAuth token" : "optional API token";
+    }
+
+    function syncAIControls() {
+      const enabled = $("ai-enabled").checked;
+      ["ai-provider", "ai-auth-method", "ai-url", "ai-model", "ai-token", "ai-oauth-enabled", "ai-oauth-auth-url", "ai-oauth-token-url", "ai-oauth-client", "ai-oauth-scopes", "ai-oauth-redirect"].forEach((id) => { $(id).disabled = !enabled; });
+      $("ai-connect-placeholder").textContent = enabled ? "Connect provider (OAuth flow placeholder)" : "AI analysis disabled";
+      syncOAuthControls();
     }
 
     function syncMetricSlots() {
@@ -1049,7 +1059,7 @@
             <text x="462" y="262" fill="#67717c" font-size="14" text-anchor="middle">Time →</text>
             <text x="18" y="150" fill="#67717c" font-size="14" transform="rotate(-90 18 150)">Value</text>
           </svg>
-          <div class="button-row" style="justify-content:start"><button data-analyze-index="${index}">Analyze with AI</button></div>
+          ${state.config?.ai?.enabled !== false ? `<div class="button-row" style="justify-content:start"><button data-analyze-index="${index}">Analyze with AI</button></div>` : ""}
           <div class="analysis-summary" id="analysis-${index}">${state.analyses[series.metric_name] ? `<strong>${safe(state.analyses[series.metric_name].provider)} analysis</strong><br>${safe(state.analyses[series.metric_name].summary)}` : ""}</div>
         </article>`;
       }).join("");
@@ -1188,7 +1198,7 @@
             retention_days: Math.max(0, Number($("storage-retention").value || 30)),
             wal: true,
           },
-          ai: { provider: $("ai-provider").value, auth_method: $("ai-oauth-enabled").checked ? $("ai-auth-method").value : "none", oauth_enabled: $("ai-oauth-enabled").checked, url: $("ai-url").value.trim(), model: $("ai-model").value.trim() || "llama3.2:3b", auth_token: $("ai-token").value.trim(), oauth_authorization_url: $("ai-oauth-auth-url").value.trim(), oauth_token_url: $("ai-oauth-token-url").value.trim(), oauth_client_id: $("ai-oauth-client").value.trim(), oauth_scopes: $("ai-oauth-scopes").value.trim(), oauth_redirect_uri: $("ai-oauth-redirect").value.trim() },
+          ai: { enabled: $("ai-enabled").checked, provider: $("ai-provider").value, auth_method: $("ai-oauth-enabled").checked ? $("ai-auth-method").value : "none", oauth_enabled: $("ai-oauth-enabled").checked, url: $("ai-url").value.trim(), model: $("ai-model").value.trim() || "llama3.2:3b", auth_token: $("ai-token").value.trim(), oauth_authorization_url: $("ai-oauth-auth-url").value.trim(), oauth_token_url: $("ai-oauth-token-url").value.trim(), oauth_client_id: $("ai-oauth-client").value.trim(), oauth_scopes: $("ai-oauth-scopes").value.trim(), oauth_redirect_uri: $("ai-oauth-redirect").value.trim() },
           revision: 0,
         }),
       });
@@ -1310,6 +1320,7 @@
       });
       $("save-config-button").addEventListener("click", saveConfig);
       $("ai-oauth-enabled").addEventListener("change", syncOAuthControls);
+      $("ai-enabled").addEventListener("change", () => { syncAIControls(); renderAll(); });
       $("save-scene-button").addEventListener("click", () => saveScene("POST"));
       $("save-unsaved-button").addEventListener("click", () => saveScene("POST"));
       $("dashboards-button").addEventListener("click", () => setRoute("configure"));

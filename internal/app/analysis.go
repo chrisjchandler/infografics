@@ -47,8 +47,12 @@ func (s *Server) handleMetricAnalysis(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) analyzeMetric(ctx context.Context, series model.CanonicalSeries) (metricAnalysisResponse, error) {
 	provider, modelName, baseURL, authToken := "ollama", "", "", ""
+	enabled := true
 	if cfg, err := s.store.GetConfig(ctx); err == nil {
-		provider, modelName, baseURL, authToken = cfg.AI.Provider, cfg.AI.Model, cfg.AI.URL, cfg.AI.AuthToken
+		provider, modelName, baseURL, authToken, enabled = cfg.AI.Provider, cfg.AI.Model, cfg.AI.URL, cfg.AI.AuthToken, cfg.AI.Enabled
+	}
+	if !enabled {
+		return metricAnalysisResponse{}, fmt.Errorf("AI analysis is disabled in Configure")
 	}
 	if provider == "" {
 		provider = "ollama"
@@ -79,6 +83,9 @@ func (s *Server) analyzeMetric(ctx context.Context, series model.CanonicalSeries
 	case "anthropic":
 		endpoint = baseURL + "/v1/messages"
 		requestBody = map[string]any{"model": modelName, "max_tokens": 300, "messages": []map[string]string{{"role": "user", "content": prompt}}}
+	case "generic":
+		endpoint = baseURL
+		requestBody = map[string]any{"model": modelName, "messages": []map[string]string{{"role": "user", "content": prompt}}, "temperature": 0.2}
 	default:
 		endpoint = baseURL + "/api/generate"
 		requestBody = map[string]any{"model": modelName, "prompt": prompt, "stream": false}

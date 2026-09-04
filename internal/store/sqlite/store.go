@@ -105,7 +105,7 @@ func (s *Store) seed(ctx context.Context) error {
 			WorkspaceName: "Operations",
 			Theme:         "dark",
 			Storage:       model.StorageConfig{Backend: "sqlite", Path: "data/infograf.db", RetentionDays: 30, WAL: true},
-			AI:            model.AIConfig{Provider: "ollama", AuthMethod: "none", OAuthEnabled: false, Model: "llama3.2:3b"},
+			AI:            model.AIConfig{Provider: "ollama", AuthMethod: "none", Enabled: true, OAuthEnabled: false, Model: "llama3.2:3b"},
 			Revision:      1,
 			UpdatedAt:     time.Now().UTC(),
 		}
@@ -141,6 +141,9 @@ func (s *Store) GetConfig(ctx context.Context) (model.AppConfig, error) {
 	var cfg model.AppConfig
 	if err := json.Unmarshal([]byte(payload), &cfg); err != nil {
 		return model.AppConfig{}, err
+	}
+	if cfg.AI.Provider == "" {
+		cfg.AI.Enabled = true
 	}
 	return cfg, nil
 }

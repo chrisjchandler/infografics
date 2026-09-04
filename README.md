@@ -169,6 +169,8 @@ go run ./cmd/infograf
 
 Without an AI URL, the action returns a clearly labeled deterministic local summary; no network call is made. The endpoint is `POST /api/v1/analysis` and accepts `{ "series": ... }` using the same canonical series contract.
 
+AI analysis can be disabled in Configure. When disabled, the graph cards remove their **Analyze with AI** actions and the backend refuses analysis requests. The provider list also includes a generic OpenAI-compatible endpoint for local gateways and hosted models that expose `/v1/chat/completions`; use that option when you do not want a vendor-specific integration.
+
 ### Integration expression builders
 
 Configure → Expression Builder includes templates for the native Infografics expression format, Power BI DAX/Power Query, and Salesforce SOQL. These templates describe how to map a metric and time range into each system while keeping the scene binding datasource-agnostic; credentials and vendor queries remain deployment-specific.

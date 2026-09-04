@@ -30,6 +30,7 @@ type AppConfig struct {
 type AIConfig struct {
 	Provider              string `json:"provider"`
 	AuthMethod            string `json:"auth_method"`
+	Enabled               bool   `json:"enabled"`
 	OAuthEnabled          bool   `json:"oauth_enabled"`
 	URL                   string `json:"url"`
 	Model                 string `json:"model"`
