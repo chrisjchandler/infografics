@@ -42,6 +42,8 @@
       padding: 0.72rem 1rem;
     }
     button:hover { border-color: rgba(15,118,110,0.4); }
+    .checkbox { display: flex; align-items: center; gap: 0.55rem; margin: 0.65rem 0; color: var(--muted); font-size: 0.9rem; }
+    .checkbox input { width: 1.1rem; height: 1.1rem; accent-color: var(--teal); }
     input[type="text"], select, textarea {
       width: 100%;
       padding: 0.7rem 0.85rem;
@@ -493,10 +495,11 @@
           <section class="section">
             <h3>AI analysis</h3>
             <div class="two"><div class="field"><label for="ai-provider">Provider</label><select id="ai-provider"><option value="ollama">Ollama / local Llama</option><option value="openai">OpenAI / ChatGPT</option><option value="anthropic">Anthropic / Claude</option></select></div><div class="field"><label for="ai-auth-method">Authentication</label><select id="ai-auth-method"><option value="none">None (local)</option><option value="api_token">API token</option><option value="oauth">OAuth access token</option></select></div></div>
+            <label class="checkbox"><input id="ai-oauth-enabled" type="checkbox"> Enable OAuth configuration</label>
             <div class="field"><label for="ai-url">Provider endpoint</label><input id="ai-url" type="url" placeholder="https://api.openai.com"></div>
             <div class="two"><div class="field"><label for="ai-model">Model</label><input id="ai-model" type="text" value="llama3.2:3b"></div><div class="field"><label for="ai-token">API / OAuth token</label><input id="ai-token" type="password" autocomplete="off" placeholder="paste token"></div></div>
-            <div class="two"><div class="field"><label for="ai-oauth-auth-url">OAuth authorization URL</label><input id="ai-oauth-auth-url" type="url" placeholder="https://provider.example/oauth/authorize"></div><div class="field"><label for="ai-oauth-token-url">OAuth token URL</label><input id="ai-oauth-token-url" type="url" placeholder="https://provider.example/oauth/token"></div></div>
-            <div class="three"><div class="field"><label for="ai-oauth-client">OAuth client ID</label><input id="ai-oauth-client" type="text"></div><div class="field"><label for="ai-oauth-scopes">OAuth scopes</label><input id="ai-oauth-scopes" type="text" placeholder="openid profile"></div><div class="field"><label for="ai-oauth-redirect">Redirect URI</label><input id="ai-oauth-redirect" type="url" placeholder="https://your-host/oauth/callback"></div></div>
+            <div class="two"><div class="field"><label for="ai-oauth-auth-url">OAuth authorization URL</label><input id="ai-oauth-auth-url" type="url" placeholder="https://foo.bar/oauth/authorize"></div><div class="field"><label for="ai-oauth-token-url">OAuth token URL</label><input id="ai-oauth-token-url" type="url" placeholder="https://foo.bar/oauth/token"></div></div>
+            <div class="three"><div class="field"><label for="ai-oauth-client">OAuth client ID</label><input id="ai-oauth-client" type="text"></div><div class="field"><label for="ai-oauth-scopes">OAuth scopes</label><input id="ai-oauth-scopes" type="text" placeholder="openid profile"></div><div class="field"><label for="ai-oauth-redirect">Redirect URI</label><input id="ai-oauth-redirect" type="url" placeholder="https://foo.bar/oauth/callback"></div></div>
             <div class="button-row" style="justify-content:start"><button id="ai-connect-placeholder" disabled>Connect provider (OAuth flow placeholder)</button></div>
             <div class="footnote">Choose a provider, endpoint, model, and token here. OAuth mode accepts a provider-issued access token. The fields above reserve the authorization-code/PKCE registration contract for a future deployment-specific consent flow. Blank local settings use deterministic summaries. Environment variables override these values.</div>
           </section>
@@ -719,6 +722,7 @@
       $("ai-url").value = state.config.ai?.url || "";
       $("ai-provider").value = state.config.ai?.provider || "ollama";
       $("ai-auth-method").value = state.config.ai?.auth_method || "none";
+      $("ai-oauth-enabled").checked = state.config.ai?.oauth_enabled === true;
       $("ai-model").value = state.config.ai?.model || "llama3.2:3b";
       $("ai-token").value = state.config.ai?.auth_token || "";
       $("ai-oauth-auth-url").value = state.config.ai?.oauth_authorization_url || "";
@@ -726,6 +730,7 @@
       $("ai-oauth-client").value = state.config.ai?.oauth_client_id || "";
       $("ai-oauth-scopes").value = state.config.ai?.oauth_scopes || "";
       $("ai-oauth-redirect").value = state.config.ai?.oauth_redirect_uri || "";
+      syncOAuthControls();
       if (!$("dashboard-title").value) {
         $("dashboard-title").value = `${state.config.workspace_name || "Operations"} live studio`;
       }
@@ -755,6 +760,12 @@
       renderMetricTree();
       renderScenes();
       updateYamlEditor();
+    }
+
+    function syncOAuthControls() {
+      const enabled = $("ai-oauth-enabled").checked;
+      ["ai-auth-method", "ai-oauth-auth-url", "ai-oauth-token-url", "ai-oauth-client", "ai-oauth-scopes", "ai-oauth-redirect"].forEach((id) => { $(id).disabled = !enabled; });
+      $("ai-token").placeholder = enabled ? "paste API/OAuth token" : "optional API token";
     }
 
     function syncMetricSlots() {
@@ -1177,7 +1188,7 @@
             retention_days: Math.max(0, Number($("storage-retention").value || 30)),
             wal: true,
           },
-          ai: { provider: $("ai-provider").value, auth_method: $("ai-auth-method").value, url: $("ai-url").value.trim(), model: $("ai-model").value.trim() || "llama3.2:3b", auth_token: $("ai-token").value.trim(), oauth_authorization_url: $("ai-oauth-auth-url").value.trim(), oauth_token_url: $("ai-oauth-token-url").value.trim(), oauth_client_id: $("ai-oauth-client").value.trim(), oauth_scopes: $("ai-oauth-scopes").value.trim(), oauth_redirect_uri: $("ai-oauth-redirect").value.trim() },
+          ai: { provider: $("ai-provider").value, auth_method: $("ai-oauth-enabled").checked ? $("ai-auth-method").value : "none", oauth_enabled: $("ai-oauth-enabled").checked, url: $("ai-url").value.trim(), model: $("ai-model").value.trim() || "llama3.2:3b", auth_token: $("ai-token").value.trim(), oauth_authorization_url: $("ai-oauth-auth-url").value.trim(), oauth_token_url: $("ai-oauth-token-url").value.trim(), oauth_client_id: $("ai-oauth-client").value.trim(), oauth_scopes: $("ai-oauth-scopes").value.trim(), oauth_redirect_uri: $("ai-oauth-redirect").value.trim() },
           revision: 0,
         }),
       });
@@ -1298,6 +1309,7 @@
         updateYamlEditor();
       });
       $("save-config-button").addEventListener("click", saveConfig);
+      $("ai-oauth-enabled").addEventListener("change", syncOAuthControls);
       $("save-scene-button").addEventListener("click", () => saveScene("POST"));
       $("save-unsaved-button").addEventListener("click", () => saveScene("POST"));
       $("dashboards-button").addEventListener("click", () => setRoute("configure"));
