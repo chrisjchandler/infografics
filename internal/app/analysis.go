@@ -84,7 +84,7 @@ func (s *Server) analyzeMetric(ctx context.Context, series model.CanonicalSeries
 		endpoint = baseURL + "/v1/messages"
 		requestBody = map[string]any{"model": modelName, "max_tokens": 300, "messages": []map[string]string{{"role": "user", "content": prompt}}}
 	case "generic":
-		endpoint = baseURL
+		endpoint = genericInferenceEndpoint(baseURL)
 		requestBody = map[string]any{"model": modelName, "messages": []map[string]string{{"role": "user", "content": prompt}}, "temperature": 0.2}
 	default:
 		endpoint = baseURL + "/api/generate"
@@ -136,6 +136,20 @@ func (s *Server) analyzeMetric(ctx context.Context, series model.CanonicalSeries
 		return metricAnalysisResponse{}, fmt.Errorf("AI endpoint returned an empty response")
 	}
 	return metricAnalysisResponse{Summary: strings.TrimSpace(output.Response), Provider: provider, Model: modelName}, nil
+}
+
+func genericInferenceEndpoint(raw string) string {
+	base := strings.TrimRight(raw, "/")
+	if strings.HasSuffix(base, "/v1/models") {
+		return strings.TrimSuffix(base, "/models") + "/chat/completions"
+	}
+	if strings.HasSuffix(base, "/v1") {
+		return base + "/chat/completions"
+	}
+	if strings.HasSuffix(base, "/chat/completions") {
+		return base
+	}
+	return base + "/v1/chat/completions"
 }
 
 func metricPrompt(series model.CanonicalSeries) string {

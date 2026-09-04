@@ -63,6 +63,18 @@ func TestMetricAnalysisUsesDeterministicLocalProvider(t *testing.T) {
 	}
 }
 
+func TestGenericInferenceEndpointNormalizesModelDiscoveryURL(t *testing.T) {
+	for input, want := range map[string]string{
+		"http://foo.bar/v1/models": "http://foo.bar/v1/chat/completions",
+		"http://foo.bar/v1":        "http://foo.bar/v1/chat/completions",
+		"http://foo.bar":           "http://foo.bar/v1/chat/completions",
+	} {
+		if got := genericInferenceEndpoint(input); got != want {
+			t.Fatalf("endpoint %q = %q, want %q", input, got, want)
+		}
+	}
+}
+
 func TestServerAPIFlow(t *testing.T) {
 	t.Parallel()
 
