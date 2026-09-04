@@ -1023,6 +1023,21 @@
           <text x="878" y="170" fill="${metric?.decreasing ? "#b42318" : metric?.increasing ? "#0f766e" : "#67717c"}" font-size="17">${safe(currentTimestamp())}</text>
         </svg>
       `;
+      if (state.config?.ai?.enabled !== false) {
+        const existing = state.analyses[series.metric_name];
+        const analysis = document.createElement("div");
+        analysis.className = "analysis-summary stage-analysis";
+        analysis.innerHTML = `<div class="button-row" style="justify-content:start"><button id="stage-analyze-button">Analyze animated metric with AI</button></div><div id="stage-analysis-result">${existing ? `<strong>${safe(existing.provider)} analysis</strong><br>${safe(existing.summary)}` : ""}</div>`;
+        $("stage-host").appendChild(analysis);
+        $("stage-analyze-button").addEventListener("click", async () => {
+          $("stage-analysis-result").textContent = "Analyzing animated metric…";
+          try {
+            const result = await fetchJSON("/api/v1/analysis", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ series }) });
+            state.analyses[series.metric_name] = result;
+            $("stage-analysis-result").innerHTML = `<strong>${safe(result.provider)} analysis</strong><br>${safe(result.summary)}`;
+          } catch (error) { $("stage-analysis-result").textContent = `Analysis unavailable: ${error.message}`; }
+        });
+      }
       tooltipHandlers($("stage-host"));
     }
 
