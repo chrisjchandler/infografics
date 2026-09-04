@@ -1320,7 +1320,7 @@
       });
       $("save-config-button").addEventListener("click", saveConfig);
       $("ai-oauth-enabled").addEventListener("change", syncOAuthControls);
-      $("ai-enabled").addEventListener("change", () => { syncAIControls(); renderAll(); });
+      $("ai-enabled").addEventListener("change", () => { state.config.ai = state.config.ai || {}; state.config.ai.enabled = $("ai-enabled").checked; syncAIControls(); renderAll(); });
       $("save-scene-button").addEventListener("click", () => saveScene("POST"));
       $("save-unsaved-button").addEventListener("click", () => saveScene("POST"));
       $("dashboards-button").addEventListener("click", () => setRoute("configure"));
