@@ -31,7 +31,7 @@
         linear-gradient(180deg, #f8f3ea 0%, #e7dbc5 100%);
     }
     button, input, select, textarea { font: inherit; }
-    button, input[type="text"], select, textarea {
+    button, input[type="text"], input[type="url"], input[type="password"], input[type="number"], select, textarea {
       border: 1px solid var(--line);
       border-radius: 1rem;
       background: rgba(255,255,255,0.86);
@@ -42,9 +42,10 @@
       padding: 0.72rem 1rem;
     }
     button:hover { border-color: rgba(15,118,110,0.4); }
+    button:disabled { cursor: not-allowed; opacity: 0.55; }
     .checkbox { display: flex; align-items: center; gap: 0.55rem; margin: 0.65rem 0; color: var(--muted); font-size: 0.9rem; }
     .checkbox input { width: 1.1rem; height: 1.1rem; accent-color: var(--teal); }
-    input[type="text"], select, textarea {
+    input[type="text"], input[type="url"], input[type="password"], input[type="number"], select, textarea {
       width: 100%;
       padding: 0.7rem 0.85rem;
     }
@@ -158,6 +159,36 @@
       display: grid;
       gap: 1rem;
     }
+    .config-save-bar {
+      position: sticky;
+      top: 0.75rem;
+      z-index: 12;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.85rem 0.95rem;
+      border: 1px solid rgba(24,33,43,0.14);
+      border-radius: 1rem;
+      background: rgba(255,251,245,0.97);
+      box-shadow: 0 12px 28px rgba(24,33,43,0.12);
+      backdrop-filter: blur(12px);
+    }
+    .config-save-copy { display: grid; gap: 0.2rem; min-width: 0; }
+    .config-save-copy strong { font-size: 0.92rem; }
+    .config-save-status { color: var(--muted); font-size: 0.84rem; line-height: 1.35; }
+    .config-save-status[data-state="dirty"] { color: var(--amber); }
+    .config-save-status[data-state="saving"] { color: var(--blue); }
+    .config-save-status[data-state="saved"] { color: var(--teal); }
+    .config-save-status[data-state="error"] { color: var(--red); }
+    .config-save-button {
+      flex: none;
+      border-color: rgba(15,118,110,0.42);
+      background: var(--teal);
+      color: white;
+      font-weight: 700;
+    }
+    .config-save-button:not(:disabled):hover { border-color: var(--teal); background: #0b655e; }
     .section, .card, .tree-node, .annotation, .metric-card {
       border: 1px solid var(--line);
       border-radius: 1rem;
@@ -297,6 +328,8 @@
     }
     @media (max-width: 760px) {
       .two, .three, .facts, .metric-grid, .metric-slots { grid-template-columns: 1fr; }
+      .config-save-bar { align-items: stretch; flex-direction: column; }
+      .config-save-button { width: 100%; }
     }
   </style>
 </head>
@@ -454,6 +487,13 @@
           <div class="chip" id="config-chip">config</div>
         </div>
         <div class="panel-body">
+          <div class="config-save-bar">
+            <div class="config-save-copy">
+              <strong>Workspace configuration</strong>
+              <span class="config-save-status" id="config-save-status" data-state="saved" role="status" aria-live="polite">Loading saved configuration…</span>
+            </div>
+            <button type="button" class="config-save-button" disabled>Save changes</button>
+          </div>
           <section class="section">
             <h3>Identity</h3>
             <div class="two">
@@ -470,7 +510,6 @@
               <label for="dashboard-title">Dashboard title</label>
               <input id="dashboard-title" type="text">
             </div>
-            <button id="save-config-button">Save configuration</button>
           </section>
 
           <section class="section">
@@ -501,7 +540,7 @@
             <div class="two"><div class="field"><label for="ai-model">Model</label><input id="ai-model" type="text" value="llama3.2:3b"></div><div class="field"><label for="ai-token">API / OAuth token</label><input id="ai-token" type="password" autocomplete="off" placeholder="paste token"></div></div>
             <div class="two"><div class="field"><label for="ai-oauth-auth-url">OAuth authorization URL</label><input id="ai-oauth-auth-url" type="url" placeholder="https://foo.bar/oauth/authorize"></div><div class="field"><label for="ai-oauth-token-url">OAuth token URL</label><input id="ai-oauth-token-url" type="url" placeholder="https://foo.bar/oauth/token"></div></div>
             <div class="three"><div class="field"><label for="ai-oauth-client">OAuth client ID</label><input id="ai-oauth-client" type="text"></div><div class="field"><label for="ai-oauth-scopes">OAuth scopes</label><input id="ai-oauth-scopes" type="text" placeholder="openid profile"></div><div class="field"><label for="ai-oauth-redirect">Redirect URI</label><input id="ai-oauth-redirect" type="url" placeholder="https://foo.bar/oauth/callback"></div></div>
-            <div class="button-row" style="justify-content:start"><button id="ai-connect-placeholder" disabled>Connect provider (OAuth flow placeholder)</button></div>
+            <div class="button-row" style="justify-content:start"><button type="button" class="config-save-button" disabled>Save AI &amp; workspace settings</button><button id="ai-connect-placeholder" disabled>Connect provider (OAuth flow placeholder)</button></div>
             <div class="footnote">Choose a provider, endpoint, model, and token here. OAuth mode accepts a provider-issued access token. The fields above reserve the authorization-code/PKCE registration contract for a future deployment-specific consent flow. Blank local settings use deterministic summaries. Environment variables override these values.</div>
           </section>
 
@@ -607,7 +646,7 @@
 
   <script>
     const state = {
-      route: "studio",
+      route: window.location.hash === "#configure" ? "configure" : "studio",
       config: null,
       scenes: [],
       catalog: null,
@@ -620,11 +659,18 @@
       playbackTimer: null,
       selectedSceneID: "",
       analyses: {},
+      configDirty: false,
+      configSaving: false,
       dashboardSubtitle: "Timestamped values determine the scene position, trend state, and replay frame; Configure manages discovery and authoring.",
       motionProfile: "metric",
     };
 
     const $ = (id) => document.getElementById(id);
+    const configFieldIDs = [
+      "product-name", "workspace-name", "storage-backend", "storage-path", "storage-retention",
+      "ai-enabled", "ai-provider", "ai-auth-method", "ai-oauth-enabled", "ai-url", "ai-model",
+      "ai-token", "ai-oauth-auth-url", "ai-oauth-token-url", "ai-oauth-client", "ai-oauth-scopes", "ai-oauth-redirect",
+    ];
 
     function fmt(value, digits = 2) {
       return Number(value || 0).toFixed(digits);
@@ -678,10 +724,25 @@
 
     async function fetchJSON(url, options) {
       const res = await fetch(url, options);
+      const text = await res.text();
       if (!res.ok) {
-        throw new Error(await res.text());
+        let message = `${res.status} ${res.statusText}`.trim();
+        if (text) {
+          try {
+            const payload = JSON.parse(text);
+            message = payload.detail || payload.error || payload.message || message;
+          } catch (_) {
+            message = text;
+          }
+        }
+        throw new Error(message);
       }
-      return res.json();
+      if (!text) return null;
+      try {
+        return JSON.parse(text);
+      } catch (_) {
+        throw new Error(`Expected JSON from ${url}, received an invalid response`);
+      }
     }
 
     async function loadAtlas(name) {
@@ -696,6 +757,7 @@
       state.catalog = await fetchJSON("/api/v1/demo/graphite/catalog");
       state.scenes = await fetchJSON("/api/v1/scenes");
       populateControls();
+      setConfigSaveState("saved", `Saved configuration · revision ${state.config.revision}`);
       await loadSceneData();
       renderAll();
     }
@@ -715,23 +777,25 @@
     }
 
     function populateControls() {
-      $("product-name").value = state.config.product_name || "Infografics";
-      $("workspace-name").value = state.config.workspace_name || "Operations";
-      $("storage-backend").value = state.config.storage?.backend || "sqlite";
-      $("storage-path").value = state.config.storage?.path || "data/infograf.db";
-      $("storage-retention").value = String(state.config.storage?.retention_days ?? 30);
-      $("ai-url").value = state.config.ai?.url || "";
-      $("ai-provider").value = state.config.ai?.provider || "ollama";
-      $("ai-enabled").checked = state.config.ai?.enabled !== false;
-      $("ai-auth-method").value = state.config.ai?.auth_method || "none";
-      $("ai-oauth-enabled").checked = state.config.ai?.oauth_enabled === true;
-      $("ai-model").value = state.config.ai?.model || "llama3.2:3b";
-      $("ai-token").value = state.config.ai?.auth_token || "";
-      $("ai-oauth-auth-url").value = state.config.ai?.oauth_authorization_url || "";
-      $("ai-oauth-token-url").value = state.config.ai?.oauth_token_url || "";
-      $("ai-oauth-client").value = state.config.ai?.oauth_client_id || "";
-      $("ai-oauth-scopes").value = state.config.ai?.oauth_scopes || "";
-      $("ai-oauth-redirect").value = state.config.ai?.oauth_redirect_uri || "";
+      if (!state.configDirty) {
+        $("product-name").value = state.config.product_name || "Infografics";
+        $("workspace-name").value = state.config.workspace_name || "Operations";
+        $("storage-backend").value = state.config.storage?.backend || "sqlite";
+        $("storage-path").value = state.config.storage?.path || "data/infograf.db";
+        $("storage-retention").value = String(state.config.storage?.retention_days ?? 30);
+        $("ai-url").value = state.config.ai?.url || "";
+        $("ai-provider").value = state.config.ai?.provider || "ollama";
+        $("ai-enabled").checked = state.config.ai?.enabled !== false;
+        $("ai-auth-method").value = state.config.ai?.auth_method || "none";
+        $("ai-oauth-enabled").checked = state.config.ai?.oauth_enabled === true;
+        $("ai-model").value = state.config.ai?.model || "llama3.2:3b";
+        $("ai-token").value = state.config.ai?.auth_token || "";
+        $("ai-oauth-auth-url").value = state.config.ai?.oauth_authorization_url || "";
+        $("ai-oauth-token-url").value = state.config.ai?.oauth_token_url || "";
+        $("ai-oauth-client").value = state.config.ai?.oauth_client_id || "";
+        $("ai-oauth-scopes").value = state.config.ai?.oauth_scopes || "";
+        $("ai-oauth-redirect").value = state.config.ai?.oauth_redirect_uri || "";
+      }
       syncOAuthControls();
       syncAIControls();
       if (!$("dashboard-title").value) {
@@ -1199,25 +1263,70 @@
       renderRoute();
     }
 
-    async function saveConfig() {
-      state.config = await fetchJSON("/api/v1/config", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          product_name: $("product-name").value.trim() || "Infografics",
-          workspace_name: $("workspace-name").value.trim() || "Operations",
-          theme: state.config.theme || "dark",
-          storage: {
-            backend: $("storage-backend").value,
-            path: $("storage-path").value.trim() || "data/infograf.db",
-            retention_days: Math.max(0, Number($("storage-retention").value || 30)),
-            wal: true,
-          },
-          ai: { enabled: $("ai-enabled").checked, provider: $("ai-provider").value, auth_method: $("ai-auth-method").value, oauth_enabled: $("ai-oauth-enabled").checked, url: $("ai-url").value.trim(), model: $("ai-model").value.trim() || "llama3.2:3b", auth_token: $("ai-token").value.trim(), oauth_authorization_url: $("ai-oauth-auth-url").value.trim(), oauth_token_url: $("ai-oauth-token-url").value.trim(), oauth_client_id: $("ai-oauth-client").value.trim(), oauth_scopes: $("ai-oauth-scopes").value.trim(), oauth_redirect_uri: $("ai-oauth-redirect").value.trim() },
-          revision: 0,
-        }),
+    function setConfigSaveState(kind, message) {
+      state.configDirty = kind !== "saved";
+      state.configSaving = kind === "saving";
+      const status = $("config-save-status");
+      status.dataset.state = kind;
+      status.textContent = message;
+      configFieldIDs.forEach((id) => { $(id).disabled = state.configSaving; });
+      if (!state.configSaving) syncAIControls();
+      document.querySelectorAll(".config-save-button").forEach((button) => {
+        button.disabled = state.configSaving || !state.configDirty;
+        button.textContent = state.configSaving ? "Saving…" : kind === "error" ? "Try again" : button.dataset.label || button.textContent;
       });
-      renderAll();
+    }
+
+    function markConfigDirty() {
+      if (state.configSaving) return;
+      setConfigSaveState("dirty", "Unsaved changes");
+    }
+
+    function configPayload() {
+      return {
+        product_name: $("product-name").value.trim() || "Infografics",
+        workspace_name: $("workspace-name").value.trim() || "Operations",
+        theme: state.config.theme || "dark",
+        storage: {
+          backend: $("storage-backend").value,
+          path: $("storage-path").value.trim() || "data/infograf.db",
+          retention_days: Math.max(0, Number($("storage-retention").value || 30)),
+          wal: true,
+        },
+        ai: {
+          enabled: $("ai-enabled").checked,
+          provider: $("ai-provider").value,
+          auth_method: $("ai-auth-method").value,
+          oauth_enabled: $("ai-oauth-enabled").checked,
+          url: $("ai-url").value.trim(),
+          model: $("ai-model").value.trim() || "llama3.2:3b",
+          auth_token: $("ai-token").value.trim(),
+          oauth_authorization_url: $("ai-oauth-auth-url").value.trim(),
+          oauth_token_url: $("ai-oauth-token-url").value.trim(),
+          oauth_client_id: $("ai-oauth-client").value.trim(),
+          oauth_scopes: $("ai-oauth-scopes").value.trim(),
+          oauth_redirect_uri: $("ai-oauth-redirect").value.trim(),
+        },
+        revision: 0,
+      };
+    }
+
+    async function saveConfig() {
+      if (state.configSaving || !state.configDirty) return;
+      setConfigSaveState("saving", "Saving configuration…");
+      try {
+        state.config = await fetchJSON("/api/v1/config", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(configPayload()),
+        });
+        setConfigSaveState("saved", `Saved configuration · revision ${state.config.revision}`);
+        renderAll();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        setConfigSaveState("error", `Save failed · ${message}`);
+        console.error("Configuration save failed", error);
+      }
     }
 
     function scenePayload() {
@@ -1333,7 +1442,14 @@
         syncMetricSlots();
         updateYamlEditor();
       });
-      $("save-config-button").addEventListener("click", saveConfig);
+      document.querySelectorAll(".config-save-button").forEach((button) => {
+        button.dataset.label = button.textContent;
+        button.addEventListener("click", saveConfig);
+      });
+      configFieldIDs.forEach((id) => {
+        $(id).addEventListener("input", markConfigDirty);
+        $(id).addEventListener("change", markConfigDirty);
+      });
       $("ai-oauth-enabled").addEventListener("change", syncOAuthControls);
       $("ai-enabled").addEventListener("change", () => { state.config.ai = state.config.ai || {}; state.config.ai.enabled = $("ai-enabled").checked; syncAIControls(); renderAll(); });
       $("save-scene-button").addEventListener("click", () => saveScene("POST"));
@@ -1390,6 +1506,17 @@
           state.route = route;
           renderRoute();
         }
+      });
+      window.addEventListener("keydown", (event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s" && state.route === "configure") {
+          event.preventDefault();
+          saveConfig();
+        }
+      });
+      window.addEventListener("beforeunload", (event) => {
+        if (!state.configDirty) return;
+        event.preventDefault();
+        event.returnValue = "";
       });
     }
 

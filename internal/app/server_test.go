@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -105,10 +106,28 @@ func TestServerAPIFlow(t *testing.T) {
 		t.Fatalf("unexpected seed config: %#v", cfg)
 	}
 
-	updatedCfg := model.AppConfig{ProductName: "Infografics", WorkspaceName: "Launchpad", Theme: "dark"}
+	updatedCfg := model.AppConfig{
+		ProductName:   "Infografics",
+		WorkspaceName: "Launchpad",
+		Theme:         "dark",
+		Storage:       model.StorageConfig{Backend: "sqlite", Path: "data/infograf.db", RetentionDays: 30, WAL: true},
+		AI: model.AIConfig{
+			Provider:   "generic",
+			AuthMethod: "api_token",
+			Enabled:    true,
+			URL:        "http://172.16.0.47:8080/v1/models",
+			Model:      "llama-3.2-3b-instruct-q4_k_m",
+			AuthToken:  "test-token",
+		},
+	}
 	requestJSON(t, ts.URL+"/api/v1/config", http.MethodPut, updatedCfg, &cfg, http.StatusOK)
-	if cfg.WorkspaceName != "Launchpad" || cfg.Revision <= 1 {
+	if cfg.WorkspaceName != "Launchpad" || cfg.Revision <= 1 || cfg.AI != updatedCfg.AI {
 		t.Fatalf("config not updated: %#v", cfg)
+	}
+	var reloadedCfg model.AppConfig
+	requestJSON(t, ts.URL+"/api/v1/config", http.MethodGet, nil, &reloadedCfg, http.StatusOK)
+	if reloadedCfg.Revision != cfg.Revision || reloadedCfg.AI != updatedCfg.AI {
+		t.Fatalf("config API round trip failed: %#v", reloadedCfg)
 	}
 
 	createdSceneReq := model.SceneDocument{
@@ -150,6 +169,39 @@ func TestServerAPIFlow(t *testing.T) {
 		t.Fatalf("unexpected demo timestamp: %s", demo.State.Timestamp.Format(time.RFC3339))
 	}
 
+}
+
+func TestConfigurationPageExposesSaveWorkflow(t *testing.T) {
+	t.Parallel()
+	server, err := New(Options{DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+	defer server.Close()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	res := httptest.NewRecorder()
+	server.mux.ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("index status = %d", res.Code)
+	}
+	html := res.Body.String()
+	configureAt := strings.Index(html, `id="page-configure"`)
+	statusAt := strings.Index(html, `id="config-save-status"`)
+	if configureAt < 0 || statusAt < configureAt {
+		t.Fatal("configuration save status is not rendered inside Configure")
+	}
+	for _, marker := range []string{
+		`role="status"`,
+		`Save AI &amp; workspace settings`,
+		`Unsaved changes`,
+		`Save failed`,
+		`beforeunload`,
+		`window.location.hash === "#configure"`,
+	} {
+		if !strings.Contains(html, marker) {
+			t.Fatalf("configuration save workflow missing %q", marker)
+		}
+	}
 }
 
 func requestJSON[T any](t *testing.T, url, method string, body any, out *T, wantStatus int) {

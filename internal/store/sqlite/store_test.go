@@ -79,3 +79,45 @@ func TestOpenSeedAndRoundTrip(t *testing.T) {
 		t.Fatalf("db not created: %v", err)
 	}
 }
+
+func TestAIConfigurationPersistsAcrossReopen(t *testing.T) {
+	t.Parallel()
+	dbPath := filepath.Join(t.TempDir(), "infograf.db")
+	st, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	ctx := context.Background()
+	cfg, err := st.GetConfig(ctx)
+	if err != nil {
+		t.Fatalf("get config: %v", err)
+	}
+	cfg.AI = model.AIConfig{
+		Provider:   "generic",
+		AuthMethod: "api_token",
+		Enabled:    true,
+		URL:        "http://172.16.0.47:8080/v1/models",
+		Model:      "llama-3.2-3b-instruct-q4_k_m",
+		AuthToken:  "test-token",
+	}
+	written, err := st.PutConfig(ctx, cfg)
+	if err != nil {
+		t.Fatalf("put config: %v", err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	reopened, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer reopened.Close()
+	persisted, err := reopened.GetConfig(ctx)
+	if err != nil {
+		t.Fatalf("get reopened config: %v", err)
+	}
+	if persisted.Revision != written.Revision || persisted.AI != cfg.AI {
+		t.Fatalf("AI config after reopen = %#v revision %d, want %#v revision %d", persisted.AI, persisted.Revision, cfg.AI, written.Revision)
+	}
+}
