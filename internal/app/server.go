@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"infograf/internal/demo"
 	"infograf/internal/model"
 	"infograf/internal/sources"
 	"infograf/internal/store"
@@ -75,10 +74,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/v1/health", s.handleHealth)
 	s.mux.HandleFunc("/api/v1/readyz", s.handleReady)
 	s.mux.HandleFunc("/api/v1/version", s.handleVersion)
-	s.mux.HandleFunc("/api/v1/demo/replication", s.handleDemoReplication)
-	s.mux.HandleFunc("/api/v1/demo/graphite", s.handleDemoGraphite)
-	s.mux.HandleFunc("/api/v1/demo/graphite/catalog", s.handleGraphiteCatalog)
-	s.mux.HandleFunc("/api/v1/demo/graphite/scene", s.handleGraphiteScene)
+	s.mux.HandleFunc("/api/v1/sources/graphite", s.handleGraphiteOverview)
+	s.mux.HandleFunc("/api/v1/sources/graphite/catalog", s.handleGraphiteCatalog)
+	s.mux.HandleFunc("/api/v1/sources/graphite/scene", s.handleGraphiteScene)
 	s.mux.HandleFunc("/api/v1/config", s.handleConfig)
 	s.mux.HandleFunc("/api/v1/scenes", s.handleScenes)
 	s.mux.HandleFunc("/api/v1/scenes/", s.handleSceneByID)
@@ -131,6 +129,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
 	_, _ = w.Write(data)
 }
 
@@ -267,26 +266,6 @@ func (s *Server) handleRevisions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, revs)
 }
 
-func (s *Server) handleDemoReplication(w http.ResponseWriter, r *http.Request) {
-	at, err := optionalTimeParam(r, "at")
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid timestamp", err.Error(), "bad_request")
-		return
-	}
-	resp, err := demo.ReplicationDemo(at, model.ReplicationOverrides{
-		LagSeconds:           optionalFloatParam(r, "lag_seconds"),
-		RateMBS:              optionalFloatParam(r, "replication_rate_mb_s"),
-		WriteTPS:             optionalFloatParam(r, "write_tps"),
-		LastCommitAgeSeconds: optionalFloatParam(r, "last_commit_age_seconds"),
-		Errors5M:             optionalFloatParam(r, "errors_5m"),
-	})
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to build demo scene", err.Error(), "demo_error")
-		return
-	}
-	writeJSON(w, http.StatusOK, resp)
-}
-
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
@@ -319,16 +298,4 @@ func optionalTimeParam(r *http.Request, name string) (*time.Time, error) {
 		return nil, err
 	}
 	return &ts, nil
-}
-
-func optionalFloatParam(r *http.Request, name string) *float64 {
-	raw := strings.TrimSpace(r.URL.Query().Get(name))
-	if raw == "" {
-		return nil
-	}
-	value, err := strconv.ParseFloat(raw, 64)
-	if err != nil {
-		return nil
-	}
-	return &value
 }

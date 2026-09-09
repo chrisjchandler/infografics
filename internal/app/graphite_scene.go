@@ -61,8 +61,8 @@ func graphiteCatalog(ctx context.Context) model.GraphiteCatalogResponse {
 	connected := err == nil
 	sourceLabel := "live Graphite"
 	if err != nil {
-		metrics = fallbackGraphiteMetricOptions()
-		sourceLabel = fmt.Sprintf("fallback metric catalog (%v)", err)
+		metrics = []model.GraphiteMetricOption{}
+		sourceLabel = fmt.Sprintf("Graphite unavailable (%v)", err)
 	}
 
 	return model.GraphiteCatalogResponse{
@@ -80,33 +80,28 @@ func graphiteCatalog(ctx context.Context) model.GraphiteCatalogResponse {
 func graphiteScene(ctx context.Context, preset graphiteScenePreset, period graphitePeriodSpec, selected []string, at *time.Time) (model.GraphiteSceneResponse, error) {
 	sourceURL := graphiteBaseURL()
 	availableMetrics, discoverErr := discoverGraphiteMetricOptions(ctx, sourceURL)
-	if discoverErr != nil {
-		availableMetrics = fallbackGraphiteMetricOptions()
+	if discoverErr != nil && len(selected) == 0 {
+		return model.GraphiteSceneResponse{}, fmt.Errorf("discover Graphite metrics: %w", discoverErr)
 	}
 	selected = normalizeSelectedMetrics(selected, preset, availableMetrics)
+	if len(selected) == 0 {
+		return model.GraphiteSceneResponse{}, fmt.Errorf("Graphite did not return any leaf metrics")
+	}
 	specs := metricOptionsToSpecs(selected, availableMetrics)
 
 	seriesByMetric, err := fetchGraphiteSeries(ctx, sourceURL, specs, period.Window)
-	connected := err == nil
-	sourceLabel := "live Graphite"
-	if err != nil || graphiteSeriesSetIncomplete(seriesByMetric, specs) {
-		seriesByMetric = fallbackGraphiteSeries(specs)
-		sourceLabel = "deterministic Graphite fixture"
-		connected = false
+	if err != nil {
+		return model.GraphiteSceneResponse{}, fmt.Errorf("fetch Graphite series: %w", err)
+	}
+	if graphiteSeriesSetIncomplete(seriesByMetric, specs) {
+		return model.GraphiteSceneResponse{}, fmt.Errorf("Graphite returned no datapoints for one or more selected metrics")
 	}
 
 	canonicalSeries := make([]model.CanonicalSeries, 0, len(specs)+1)
-	fallbackSeries := fallbackGraphiteSeries(specs)
 	for _, spec := range specs {
 		series := graphiteSeriesToCanonical(spec, seriesByMetric[spec.Metric], sourceURL)
 		if len(series.Points) == 0 {
-			// Graphite can return HTTP 200 with an empty target alongside valid
-			// targets. The scene contract requires every selected metric to be
-			// replayable, so repair that individual series from the deterministic
-			// fixture instead of surfacing a transport error in the stage.
-			series = graphiteSeriesToCanonical(spec, fallbackSeries[spec.Metric], sourceURL)
-			connected = false
-			sourceLabel = "deterministic Graphite fixture (partial source)"
+			return model.GraphiteSceneResponse{}, fmt.Errorf("Graphite metric %q has no numeric datapoints", spec.Metric)
 		}
 		canonicalSeries = append(canonicalSeries, series)
 	}
@@ -135,9 +130,9 @@ func graphiteScene(ctx context.Context, preset graphiteScenePreset, period graph
 	}
 
 	return model.GraphiteSceneResponse{
-		Connected:        connected,
+		Connected:        true,
 		SourceURL:        sourceURL,
-		SourceLabel:      sourceLabel,
+		SourceLabel:      "live Graphite",
 		Period:           period.Key,
 		PeriodLabel:      period.Label,
 		Window:           period.Window,
@@ -162,26 +157,6 @@ func graphiteSeriesSetIncomplete(series map[string]graphiteSeries, specs []graph
 		}
 	}
 	return false
-}
-
-func fallbackGraphiteSeries(specs []graphiteMetricSpec) map[string]graphiteSeries {
-	base := time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC)
-	profiles := [][]float64{
-		{18, 24, 37, 71, 83, 62, 44, 29, 21},
-		{72, 70, 65, 51, 34, 48, 61, 69, 74},
-		{2, 3, 5, 13, 29, 18, 9, 4, 2},
-	}
-	out := make(map[string]graphiteSeries, len(specs))
-	for specIndex, spec := range specs {
-		profile := profiles[specIndex%len(profiles)]
-		datapoints := make([][]any, 0, len(profile))
-		for pointIndex, value := range profile {
-			ts := base.Add(time.Duration(pointIndex) * 15 * time.Minute).Unix()
-			datapoints = append(datapoints, []any{value, float64(ts)})
-		}
-		out[spec.Metric] = graphiteSeries{Target: spec.Metric, Datapoints: datapoints}
-	}
-	return out
 }
 
 func selectedGraphiteMetrics(r *http.Request) []string {
@@ -230,24 +205,32 @@ func connectorOptions() []model.SourceConnectorOption {
 }
 
 func discoverGraphiteMetricOptions(ctx context.Context, sourceURL string) ([]model.GraphiteMetricOption, error) {
-	queries := []string{
-		"servers.Console-1.cpu.usage_*",
-		"servers.Console-1.disk.mmcblk0p2.*",
-		"stats.response.*",
-		"stats.statsd.*",
-	}
+	queries := []string{"*"}
+	visited := map[string]bool{}
 	seen := map[string]model.GraphiteMetricOption{}
-	for _, query := range queries {
+	for len(queries) > 0 {
+		query := queries[0]
+		queries = queries[1:]
+		if visited[query] {
+			continue
+		}
+		visited[query] = true
 		items, err := fetchGraphiteMetricTree(ctx, sourceURL, query)
 		if err != nil {
 			return nil, err
 		}
 		for _, item := range items {
-			if item.Leaf == 0 {
+			metric := strings.TrimSpace(item.ID)
+			if metric == "" {
 				continue
 			}
-			option := graphiteMetricOption(item.ID)
-			seen[option.Metric] = option
+			if item.Leaf != 0 {
+				option := graphiteMetricOption(metric)
+				seen[option.Metric] = option
+			}
+			if item.Leaf == 0 || item.AllowChildren != 0 || item.Expandable != 0 {
+				queries = append(queries, metric+".*")
+			}
 		}
 	}
 
@@ -280,34 +263,7 @@ func fetchGraphiteMetricTree(ctx context.Context, sourceURL, query string) ([]gr
 	return items, nil
 }
 
-func fallbackGraphiteMetricOptions() []model.GraphiteMetricOption {
-	out := make([]model.GraphiteMetricOption, 0, len(graphiteMetricSpecs()))
-	for _, spec := range graphiteMetricSpecs() {
-		out = append(out, model.GraphiteMetricOption{
-			Metric:             spec.Metric,
-			Label:              spec.Label,
-			Unit:               spec.Unit,
-			PreferredDirection: preferredDirection(spec),
-		})
-	}
-	return out
-}
-
 func normalizeSelectedMetrics(selected []string, preset graphiteScenePreset, available []model.GraphiteMetricOption) []string {
-	if len(selected) == 0 {
-		switch preset.Key {
-		case "icarus":
-			selected = []string{"servers.Console-1.cpu.usage_idle"}
-		case "cerberus":
-			selected = []string{
-				"servers.Console-1.cpu.usage_active",
-				"servers.Console-1.disk.mmcblk0p2.used_percent",
-				"stats.response.404",
-			}
-		default:
-			selected = []string{"servers.Console-1.cpu.usage_active"}
-		}
-	}
 	seen := map[string]bool{}
 	out := make([]string, 0, preset.MetricSlots)
 	for _, metric := range selected {
@@ -321,14 +277,8 @@ func normalizeSelectedMetrics(selected []string, preset graphiteScenePreset, ava
 			break
 		}
 	}
-	for _, option := range available {
-		if len(out) == preset.MetricSlots {
-			break
-		}
-		if !seen[option.Metric] {
-			out = append(out, option.Metric)
-			seen[option.Metric] = true
-		}
+	if len(out) == 0 && len(available) > 0 {
+		out = append(out, available[0].Metric)
 	}
 	return out
 }
@@ -359,16 +309,6 @@ func metricOptionsToSpecs(metrics []string, available []model.GraphiteMetricOpti
 }
 
 func graphiteMetricOption(metric string) model.GraphiteMetricOption {
-	for _, spec := range graphiteMetricSpecs() {
-		if spec.Metric == metric {
-			return model.GraphiteMetricOption{
-				Metric:             spec.Metric,
-				Label:              spec.Label,
-				Unit:               spec.Unit,
-				PreferredDirection: preferredDirection(spec),
-			}
-		}
-	}
 	label := metric
 	if parts := strings.Split(metric, "."); len(parts) > 0 {
 		label = strings.ReplaceAll(parts[len(parts)-1], "_", " ")
@@ -389,10 +329,19 @@ func graphiteMetricOption(metric string) model.GraphiteMetricOption {
 	}
 	return model.GraphiteMetricOption{
 		Metric:             metric,
+		Namespace:          graphiteMetricNamespace(metric),
 		Label:              label,
 		Unit:               unit,
 		PreferredDirection: preferred,
 	}
+}
+
+func graphiteMetricNamespace(metric string) string {
+	metric = strings.TrimSpace(metric)
+	if split := strings.LastIndex(metric, "."); split > 0 {
+		return metric[:split]
+	}
+	return ""
 }
 
 func preferredDirection(spec graphiteMetricSpec) string {

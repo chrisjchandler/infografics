@@ -364,8 +364,8 @@
     <section class="page active" id="page-studio">
       <aside class="panel">
         <div class="panel-head">
-          <h2>Playback</h2>
-          <div class="chip" id="playback-chip">paused</div>
+          <h2>Scene Setup</h2>
+          <div class="chip">authoring</div>
         </div>
         <div class="panel-body">
           <section class="section">
@@ -401,36 +401,12 @@
               <div class="field" id="studio-slot-5"><label for="studio-metric-5">Metric E</label><input id="studio-metric-5" type="text" list="metric-options"></div>
               <div class="field" id="studio-slot-6"><label for="studio-metric-6">Metric F</label><input id="studio-metric-6" type="text" list="metric-options"></div>
             </div>
-            <div class="button-row" style="justify-content:start"><button id="apply-studio-button">Load selected scene</button><button id="save-unsaved-button">Save this view</button></div>
-          </section>
-
-          <section class="section">
-            <h3>Timeline</h3>
-            <div class="button-row" style="justify-content:start">
-              <button id="play-button">Play</button>
-              <button id="pause-button">Pause</button>
-              <button id="prev-button">Previous</button>
-              <button id="next-button">Next</button>
-            </div>
+            <div class="button-row" style="justify-content:start"><button id="apply-studio-button">Apply metrics to view</button></div>
             <div class="field">
-              <label for="playback-speed">Playback speed</label>
-              <select id="playback-speed">
-                <option value="120">Fast</option>
-                <option value="250" selected>Normal</option>
-                <option value="500">Slow</option>
-              </select>
+              <label for="studio-save-name">Save as dashboard</label>
+              <input id="studio-save-name" type="text" placeholder="Name this dashboard">
             </div>
-            <div class="field">
-              <label for="motion-profile">Motion profile</label>
-              <select id="motion-profile">
-                <option value="metric" selected>Metric faithful</option>
-                <option value="cinematic">Cinematic easing</option>
-                <option value="freeze">Hold on source frames</option>
-              </select>
-              <div class="help">Profiles only change interpolation/frame presentation; source time and values remain exact.</div>
-            </div>
-            <input id="timeline-slider" type="range" min="0" max="0" step="1" value="0">
-            <div class="mono" id="timeline-caption">waiting for scene data</div>
+            <div class="button-row" style="justify-content:start"><button id="save-as-button">Save as new dashboard</button></div>
           </section>
 
           <section class="section">
@@ -450,9 +426,42 @@
           <div class="canvas-wrap">
             <div id="stage-host"></div>
           </div>
-          <div class="canvas-wrap">
-            <div id="timeline-host"></div>
-          </div>
+          <section class="section" id="stage-playback">
+            <div class="panel-head" style="padding:0 0 0.8rem; border-bottom:0">
+              <h3>Playback &amp; Timeline</h3>
+              <div class="chip" id="playback-chip">paused</div>
+            </div>
+            <div class="button-row" style="justify-content:start">
+              <button id="play-button">Play</button>
+              <button id="pause-button">Pause</button>
+              <button id="prev-button">Previous</button>
+              <button id="next-button">Next</button>
+            </div>
+            <div class="two">
+              <div class="field">
+                <label for="playback-speed">Playback speed</label>
+                <select id="playback-speed">
+                  <option value="120">Fast</option>
+                  <option value="250" selected>Normal</option>
+                  <option value="500">Slow</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="motion-profile">Motion profile</label>
+                <select id="motion-profile">
+                  <option value="metric" selected>Metric faithful</option>
+                  <option value="cinematic">Cinematic easing</option>
+                  <option value="freeze">Hold on source frames</option>
+                </select>
+              </div>
+            </div>
+            <div class="help">Profiles only change interpolation/frame presentation; source time and values remain exact.</div>
+            <input id="timeline-slider" type="range" min="0" max="0" step="1" value="0">
+            <div class="mono" id="timeline-caption">waiting for scene data</div>
+            <div class="canvas-wrap">
+              <div id="timeline-host"></div>
+            </div>
+          </section>
           <section class="section">
             <h3>Graph panels · overlay-ready</h3>
             <div class="footnote">Each selected metric gets its own labeled chart; choose the same metric across Console-1 and Console-2 to compare hosts on a shared time window.</div>
@@ -560,7 +569,7 @@
               <input id="scene-name" type="text">
             </div>
             <div class="button-row" style="justify-content:start">
-              <button id="save-scene-button">Save new</button>
+              <button id="save-scene-button">Save as new</button>
               <button id="update-scene-button">Update selected</button>
             </div>
             <div class="scene-list" id="scene-list"></div>
@@ -654,7 +663,7 @@
       atlas: {},
       selectedPreset: "sisyphus",
       selectedPeriod: "1h",
-      selectedMetrics: ["servers.Console-1.cpu.usage_active"],
+      selectedMetrics: [],
       currentFrameIndex: 0,
       playbackTimer: null,
       selectedSceneID: "",
@@ -754,7 +763,7 @@
     async function loadBoot() {
       await Promise.all([loadAtlas("sisyphus"), loadAtlas("icarus"), loadAtlas("cerberus")]);
       state.config = await fetchJSON("/api/v1/config");
-      state.catalog = await fetchJSON("/api/v1/demo/graphite/catalog");
+      state.catalog = await fetchJSON("/api/v1/sources/graphite/catalog");
       state.scenes = await fetchJSON("/api/v1/scenes");
       populateControls();
       setConfigSaveState("saved", `Saved configuration · revision ${state.config.revision}`);
@@ -763,7 +772,7 @@
     }
 
     async function loadSceneData() {
-      const url = new URL("/api/v1/demo/graphite/scene", window.location.origin);
+      const url = new URL("/api/v1/sources/graphite/scene", window.location.origin);
       url.searchParams.set("preset", state.selectedPreset);
       url.searchParams.set("period", state.selectedPeriod);
       if (state.selectedMetrics[0]) url.searchParams.set("metric", state.selectedMetrics[0]);
@@ -773,6 +782,7 @@
       if (state.selectedMetrics[4]) url.searchParams.set("metric_e", state.selectedMetrics[4]);
       if (state.selectedMetrics[5]) url.searchParams.set("metric_f", state.selectedMetrics[5]);
       state.sceneResponse = await fetchJSON(url);
+      state.selectedMetrics = (state.sceneResponse.selected_metrics || []).slice(0, 6);
       state.currentFrameIndex = state.sceneResponse.frames.length - 1;
     }
 
@@ -805,7 +815,7 @@
         $("studio-heading").value = $("dashboard-title").value;
       }
       $("graphite-source").value = state.catalog.source_url;
-      $("catalog-chip").textContent = state.catalog.connected ? `${state.catalog.metrics.length} live metrics` : "fallback catalog";
+      $("catalog-chip").textContent = state.catalog.connected ? `${state.catalog.metrics.length} live metrics` : "source unavailable";
       $("source-chip").textContent = `${state.catalog.source_label} @ ${state.catalog.source_url}`;
       $("connector-list").innerHTML = state.catalog.connectors.map((connector) => `
         <article class="card">
@@ -815,7 +825,7 @@
         </article>
       `).join("");
       $("scene-selector").innerHTML = `<option value="">Current unsaved view</option>` + state.scenes.map((scene) => `<option value="${safe(scene.id)}" ${scene.id === state.selectedSceneID ? "selected" : ""}>${safe(scene.name)}</option>`).join("");
-      $("metric-options").innerHTML = state.catalog.metrics.map((metric) => `<option value="${safe(metric.metric)}">${safe(metric.label)}</option>`).join("");
+      renderMetricOptions();
       const presetOptions = state.catalog.presets.map((preset) => `<option value="${preset.key}" ${preset.key === state.selectedPreset ? "selected" : ""}>${safe(preset.label)}</option>`).join("");
       const periodOptions = state.catalog.periods.map((period) => `<option value="${period.key}" ${period.key === state.selectedPeriod ? "selected" : ""}>${safe(period.label)}</option>`).join("");
       $("studio-preset").innerHTML = presetOptions;
@@ -847,6 +857,14 @@
       for (let i = 1; i <= 6; i++) {
         $(`studio-slot-${i}`).classList.toggle("hidden", i > slots);
       }
+    }
+
+    function renderMetricOptions(prefix = "") {
+      const normalizedPrefix = String(prefix).trim().toLowerCase();
+      const metrics = normalizedPrefix
+        ? state.catalog.metrics.filter((metric) => metric.metric.toLowerCase().startsWith(normalizedPrefix))
+        : state.catalog.metrics;
+      $("metric-options").innerHTML = metrics.map((metric) => `<option value="${safe(metric.metric)}" label="${safe(metric.namespace ? `${metric.namespace} · ${metric.label}` : metric.label)}"></option>`).join("");
     }
 
     function buildMetricTree(metrics) {
@@ -1202,6 +1220,8 @@
 
     function updateYamlEditor() {
       const metric = $("expr-metric").value.trim() || state.selectedMetrics[0] || "";
+      const knownMetric = state.catalog?.metrics?.find((item) => item.metric === metric);
+      const namespace = knownMetric?.namespace ?? metric.split(".").slice(0, -1).join(".");
       const operator = $("expr-operator").value;
       const threshold = $("expr-threshold").value.trim() || "10";
       const duration = $("expr-duration").value.trim() || "30s";
@@ -1218,6 +1238,7 @@
         ...integrationLines,
         "  metric:",
         `    name: ${metric}`,
+        `    namespace: ${namespace}`,
         "  axes:",
         "    x: timestamp",
         "    y: value",
@@ -1250,6 +1271,10 @@
       $("config-chip").textContent = `revision ${state.config.revision}`;
       $("studio-preset").value = state.selectedPreset;
       $("studio-period").value = state.selectedPeriod;
+      for (let i = 1; i <= 6; i++) {
+        const metricInput = $(`studio-metric-${i}`);
+        if (document.activeElement !== metricInput) metricInput.value = state.selectedMetrics[i - 1] || "";
+      }
       $("scene-name").value ||= heading;
       $("expr-metric").value ||= state.selectedMetrics[0] || "";
       $("timeline-slider").max = String(Math.max(0, state.sceneResponse.frames.length - 1));
@@ -1341,9 +1366,9 @@
       };
     }
 
-    async function saveScene(method) {
+    async function saveScene(method, explicitName = "") {
       const payload = {
-        name: $("scene-name").value.trim() || $("dashboard-title").value.trim() || "Graphite dashboard",
+        name: explicitName.trim() || $("scene-name").value.trim() || $("dashboard-title").value.trim() || "Graphite dashboard",
         kind: "graphite-dashboard",
         status: "published",
         description: "Live infographic configuration with schema-backed expression builder",
@@ -1356,9 +1381,26 @@
         body: JSON.stringify(payload),
       });
       state.selectedSceneID = saved.id || state.selectedSceneID;
+      $("scene-name").value = saved.name || payload.name;
       state.scenes = await fetchJSON("/api/v1/scenes");
-      renderScenes();
       populateControls();
+      $("scene-selector").value = state.selectedSceneID;
+      renderScenes();
+    }
+
+    async function saveCurrentViewAs() {
+      const nameInput = $("studio-save-name");
+      const name = nameInput.value.trim();
+      if (!name) {
+        nameInput.setCustomValidity("Enter a name for the new dashboard.");
+        nameInput.reportValidity();
+        nameInput.focus();
+        return;
+      }
+      nameInput.setCustomValidity("");
+      await applySceneSelection();
+      await saveScene("POST", name);
+      nameInput.value = "";
     }
 
     function setRoute(route) {
@@ -1413,7 +1455,7 @@
       $("nav-configure").addEventListener("click", () => setRoute("configure"));
       $("reload-button").addEventListener("click", async () => {
         stopPlayback();
-        state.catalog = await fetchJSON("/api/v1/demo/graphite/catalog");
+        state.catalog = await fetchJSON("/api/v1/sources/graphite/catalog");
         populateControls();
         await loadSceneData();
         renderAll();
@@ -1453,7 +1495,8 @@
       $("ai-oauth-enabled").addEventListener("change", syncOAuthControls);
       $("ai-enabled").addEventListener("change", () => { state.config.ai = state.config.ai || {}; state.config.ai.enabled = $("ai-enabled").checked; syncAIControls(); renderAll(); });
       $("save-scene-button").addEventListener("click", () => saveScene("POST"));
-      $("save-unsaved-button").addEventListener("click", () => saveScene("POST"));
+      $("save-as-button").addEventListener("click", saveCurrentViewAs);
+      $("studio-save-name").addEventListener("input", () => $("studio-save-name").setCustomValidity(""));
       $("dashboards-button").addEventListener("click", () => setRoute("configure"));
       $("scene-selector").addEventListener("change", async (event) => {
         const id = event.target.value;
@@ -1475,6 +1518,11 @@
       });
       $("update-scene-button").addEventListener("click", () => {
         if (state.selectedSceneID) saveScene("PATCH");
+      });
+      const metricInputs = [$("expr-metric"), ...Array.from({length: 6}, (_, index) => $(`studio-metric-${index + 1}`))];
+      metricInputs.forEach((input) => {
+        input.addEventListener("focus", () => renderMetricOptions(input.value));
+        input.addEventListener("input", () => renderMetricOptions(input.value));
       });
       $("expr-metric").addEventListener("input", updateYamlEditor);
       $("expr-operator").addEventListener("change", updateYamlEditor);

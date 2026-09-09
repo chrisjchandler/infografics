@@ -16,7 +16,7 @@ The screenshots are committed under `docs/screenshots/` so they render offline i
 
 - Go REST backend with an embedded Studio UI.
 - SQLite control-plane store for configuration, saved dashboards, and revisions.
-- Graphite discovery and replay with deterministic fallback data for unavailable or partial targets.
+- Full Graphite branch discovery and replay using only source-reported metrics and datapoints.
 - Multi-metric scenes, saved dashboard switching, host overlays, labeled graph panels, timeline notes, and deterministic playback.
 - Source adapters for Prometheus, CSV, XLSX worksheet templates, OpenTelemetry JSON, REST/JSON, and raw plaintext.
 - Animation-ready sprite atlases with explicit provenance metadata.
@@ -74,7 +74,7 @@ INFOGRAF_ADDR=127.0.0.1:8080 \
 go run ./cmd/infograf
 ```
 
-The Studio discovers common metric paths, accepts up to six metrics, and replays source timestamps. Empty or partial Graphite targets are replaced by deterministic fixture points and labeled accordingly.
+The Studio traverses the Graphite metric tree from its root, accepts up to six metrics, and replays source timestamps. Unavailable sources and empty or partial targets are reported as errors; production responses never substitute fixture values.
 
 ### Canonical adapter API
 
@@ -129,7 +129,7 @@ Supported kinds:
 
 | Kind | Payload | Notes |
 | --- | --- | --- |
-| `graphite` | Graphite HTTP source | Live catalog and demo replay. |
+| `graphite` | Graphite HTTP source | Live branch catalog and timestamped replay. |
 | `prometheus` | Prometheus text exposition | Labels and optional millisecond timestamps. |
 | `csv` | RFC 4180 CSV | Timestamp column plus numeric metric columns. |
 | `xlsx` | Selected worksheet as CSV bytes | Workbook extraction belongs in the upload boundary. |

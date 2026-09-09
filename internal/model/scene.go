@@ -20,12 +20,12 @@ type MetricSemantics struct {
 }
 
 type CanonicalSeries struct {
-	ID             string          `json:"id"`
-	SourceRef      string          `json:"source_ref"`
-	MetricName     string          `json:"metric_name"`
-	Label          string          `json:"label"`
-	Semantics      MetricSemantics `json:"semantics"`
-	Points         []CanonicalPoint `json:"points"`
+	ID         string           `json:"id"`
+	SourceRef  string           `json:"source_ref"`
+	MetricName string           `json:"metric_name"`
+	Label      string           `json:"label"`
+	Semantics  MetricSemantics  `json:"semantics"`
+	Points     []CanonicalPoint `json:"points"`
 }
 
 type CanonicalEvent struct {
@@ -71,19 +71,19 @@ type SceneDefinition struct {
 }
 
 type MetricEvaluation struct {
-	BindingID      string  `json:"binding_id"`
-	MetricName     string  `json:"metric_name"`
-	Value          float64 `json:"value"`
-	PreviousValue  float64 `json:"previous_value"`
-	Delta          float64 `json:"delta"`
-	RatePerSecond  float64 `json:"rate_per_second"`
-	Normalized     float64 `json:"normalized"`
-	MappedValue    float64 `json:"mapped_value"`
-	Increasing     bool    `json:"increasing"`
-	Decreasing     bool    `json:"decreasing"`
-	Stable         bool    `json:"stable"`
-	Acceleration   float64 `json:"acceleration"`
-	Volatility     float64 `json:"volatility"`
+	BindingID     string  `json:"binding_id"`
+	MetricName    string  `json:"metric_name"`
+	Value         float64 `json:"value"`
+	PreviousValue float64 `json:"previous_value"`
+	Delta         float64 `json:"delta"`
+	RatePerSecond float64 `json:"rate_per_second"`
+	Normalized    float64 `json:"normalized"`
+	MappedValue   float64 `json:"mapped_value"`
+	Increasing    bool    `json:"increasing"`
+	Decreasing    bool    `json:"decreasing"`
+	Stable        bool    `json:"stable"`
+	Acceleration  float64 `json:"acceleration"`
+	Volatility    float64 `json:"volatility"`
 }
 
 type SceneObjectState struct {
@@ -101,45 +101,9 @@ type SceneObjectState struct {
 }
 
 type SceneState struct {
-	SceneID    string             `json:"scene_id"`
-	Timestamp  time.Time          `json:"timestamp"`
-	Objects    []SceneObjectState `json:"objects"`
-	Metrics    []MetricEvaluation `json:"metrics"`
-	ActiveEvents []CanonicalEvent `json:"active_events"`
-}
-
-type TraceStep struct {
-	Stage          string `json:"stage"`
-	Classification string `json:"classification"`
-	Detail         string `json:"detail"`
-}
-
-type ReplicationFixturePoint struct {
-	Timestamp               time.Time `json:"timestamp"`
-	ReplicationLagSeconds   float64   `json:"replication_lag_seconds"`
-	ReplicationRateMBS      float64   `json:"replication_rate_mb_s"`
-	WriteTPS                float64   `json:"write_tps"`
-	LastCommitAgeSeconds    float64   `json:"last_commit_age_seconds"`
-	Errors5M                float64   `json:"errors_5m"`
-}
-
-type ReplicationFixture struct {
-	SourceRef string                   `json:"source_ref"`
-	Points    []ReplicationFixturePoint `json:"points"`
-	Events    []CanonicalEvent         `json:"events"`
-}
-
-type ReplicationOverrides struct {
-	LagSeconds           *float64
-	RateMBS              *float64
-	WriteTPS             *float64
-	LastCommitAgeSeconds *float64
-	Errors5M             *float64
-}
-
-type ReplicationDemoResponse struct {
-	Scene   SceneDefinition    `json:"scene"`
-	Fixture ReplicationFixture `json:"fixture"`
-	State   SceneState         `json:"state"`
-	Trace   []TraceStep        `json:"trace"`
+	SceneID      string             `json:"scene_id"`
+	Timestamp    time.Time          `json:"timestamp"`
+	Objects      []SceneObjectState `json:"objects"`
+	Metrics      []MetricEvaluation `json:"metrics"`
+	ActiveEvents []CanonicalEvent   `json:"active_events"`
 }

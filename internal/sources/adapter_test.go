@@ -8,11 +8,11 @@ import (
 func TestCSVAndPlaintextProduceEquivalentCanonicalSeries(t *testing.T) {
 	t.Parallel()
 	registry := DefaultRegistry()
-	csvResult, err := registry.Adapt(context.Background(), "csv", Request{SourceRef: "csv-demo", Payload: []byte("timestamp,availability\n2026-09-02T12:00:00Z,99.9\n2026-09-02T12:01:00Z,98.5\n")})
+	csvResult, err := registry.Adapt(context.Background(), "csv", Request{SourceRef: "csv-test", Payload: []byte("timestamp,availability\n2026-09-02T12:00:00Z,99.9\n2026-09-02T12:01:00Z,98.5\n")})
 	if err != nil {
 		t.Fatalf("adapt csv: %v", err)
 	}
-	textResult, err := registry.Adapt(context.Background(), "plaintext", Request{SourceRef: "text-demo", Payload: []byte("availability 99.9 1788350400\navailability 98.5 1788350460\n")})
+	textResult, err := registry.Adapt(context.Background(), "plaintext", Request{SourceRef: "text-test", Payload: []byte("availability 99.9 1788350400\navailability 98.5 1788350460\n")})
 	if err != nil {
 		t.Fatalf("adapt plaintext: %v", err)
 	}

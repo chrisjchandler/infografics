@@ -13,7 +13,6 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"infograf/internal/demo"
 	"infograf/internal/model"
 	"infograf/internal/store"
 )
@@ -45,11 +44,65 @@ func Open(path string) (*Store, error) {
 		_ = db.Close()
 		return nil, err
 	}
+	if err := s.repairLegacyScenes(ctx); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	if err := s.seed(ctx); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
 	return s, nil
+}
+
+func (s *Store) repairLegacyScenes(ctx context.Context) error {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, payload FROM scenes`)
+	if err != nil {
+		return fmt.Errorf("inspect legacy scenes: %w", err)
+	}
+	type payloadRepair struct {
+		id      string
+		payload json.RawMessage
+	}
+	var repairs []payloadRepair
+	for rows.Next() {
+		var id, raw string
+		if err := rows.Scan(&id, &raw); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("scan legacy scene: %w", err)
+		}
+		var wrapped model.SceneDocument
+		if err := json.Unmarshal([]byte(raw), &wrapped); err == nil && wrapped.ID == id && len(wrapped.Payload) > 0 {
+			repairs = append(repairs, payloadRepair{id: id, payload: wrapped.Payload})
+		}
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close legacy scenes: %w", err)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("read legacy scenes: %w", err)
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	for _, repair := range repairs {
+		if _, err := tx.ExecContext(ctx, `UPDATE scenes SET payload = ? WHERE id = ?`, string(repair.payload), repair.id); err != nil {
+			return fmt.Errorf("repair scene %q payload: %w", repair.id, err)
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM revisions WHERE entity_type = 'scene' AND entity_id = 'scene_replication_demo'`); err != nil {
+		return fmt.Errorf("remove legacy replication revisions: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM scenes WHERE id = 'scene_replication_demo' AND kind = 'replication-demo'`); err != nil {
+		return fmt.Errorf("remove legacy replication scene: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *Store) Close() error { return s.db.Close() }
@@ -114,18 +167,6 @@ func (s *Store) seed(ctx context.Context) error {
 		}
 	}
 
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM scenes`).Scan(&count); err != nil {
-		return fmt.Errorf("count scenes: %w", err)
-	}
-	if count == 0 {
-		scene, err := demoSceneDocument()
-		if err != nil {
-			return err
-		}
-		if _, err := s.createSceneTx(ctx, scene, false); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -288,7 +329,7 @@ func (s *Store) createSceneTx(ctx context.Context, scene model.SceneDocument, si
 	scene.Revision = 1
 	scene.CreatedAt = now
 	scene.UpdatedAt = now
-	payload, err := json.Marshal(scene)
+	documentPayload, err := json.Marshal(scene)
 	if err != nil {
 		return model.SceneDocument{}, err
 	}
@@ -299,7 +340,7 @@ func (s *Store) createSceneTx(ctx context.Context, scene model.SceneDocument, si
 	defer func() { _ = tx.Rollback() }()
 	_, err = tx.ExecContext(ctx, `INSERT INTO scenes(id, slug, name, kind, status, description, revision, payload, created_at, updated_at)
 		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		scene.ID, scene.Slug, scene.Name, scene.Kind, scene.Status, scene.Description, scene.Revision, string(payload),
+		scene.ID, scene.Slug, scene.Name, scene.Kind, scene.Status, scene.Description, scene.Revision, string(scene.Payload),
 		scene.CreatedAt.Format(time.RFC3339Nano), scene.UpdatedAt.Format(time.RFC3339Nano))
 	if err != nil {
 		return model.SceneDocument{}, err
@@ -310,7 +351,7 @@ func (s *Store) createSceneTx(ctx context.Context, scene model.SceneDocument, si
 			EntityID:   scene.ID,
 			Action:     "create",
 			Summary:    "scene created",
-			Payload:    payload,
+			Payload:    documentPayload,
 			CreatedAt:  scene.CreatedAt,
 		}); err != nil {
 			return model.SceneDocument{}, err
@@ -369,7 +410,7 @@ func (s *Store) UpdateScene(ctx context.Context, id string, scene model.SceneDoc
 	}
 	current.Revision++
 	current.UpdatedAt = time.Now().UTC()
-	payload, err := json.Marshal(current)
+	documentPayload, err := json.Marshal(current)
 	if err != nil {
 		return model.SceneDocument{}, err
 	}
@@ -379,7 +420,7 @@ func (s *Store) UpdateScene(ctx context.Context, id string, scene model.SceneDoc
 	}
 	defer func() { _ = tx.Rollback() }()
 	_, err = tx.ExecContext(ctx, `UPDATE scenes SET slug = ?, name = ?, kind = ?, status = ?, description = ?, revision = ?, payload = ?, updated_at = ? WHERE id = ?`,
-		current.Slug, current.Name, current.Kind, current.Status, current.Description, current.Revision, string(payload), current.UpdatedAt.Format(time.RFC3339Nano), id)
+		current.Slug, current.Name, current.Kind, current.Status, current.Description, current.Revision, string(current.Payload), current.UpdatedAt.Format(time.RFC3339Nano), id)
 	if err != nil {
 		return model.SceneDocument{}, err
 	}
@@ -388,7 +429,7 @@ func (s *Store) UpdateScene(ctx context.Context, id string, scene model.SceneDoc
 		EntityID:   current.ID,
 		Action:     "update",
 		Summary:    "scene updated",
-		Payload:    payload,
+		Payload:    documentPayload,
 		CreatedAt:  current.UpdatedAt,
 	}); err != nil {
 		return model.SceneDocument{}, err
@@ -463,10 +504,6 @@ func (s *Store) insertRevisionTx(ctx context.Context, tx *sql.Tx, rev model.Revi
 		VALUES(?, ?, ?, ?, ?, ?, ?)`,
 		rev.ID, rev.EntityType, rev.EntityID, rev.Action, rev.Summary, string(rev.Payload), rev.CreatedAt.Format(time.RFC3339Nano))
 	return err
-}
-
-func demoSceneDocument() (model.SceneDocument, error) {
-	return demo.ReplicationSceneDocument()
 }
 
 func newID(prefix string) string {

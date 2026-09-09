@@ -47,17 +47,36 @@ var graphitePeriods = []graphitePeriodSpec{
 	{Key: "7d", Label: "Last 7 days", Window: "-7d"},
 }
 
-func (s *Server) handleDemoGraphite(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleGraphiteOverview(w http.ResponseWriter, r *http.Request) {
 	period := graphitePeriodFor(strings.TrimSpace(r.URL.Query().Get("period")))
-	writeJSON(w, http.StatusOK, graphiteOverview(r.Context(), period))
+	overview, err := graphiteOverview(r.Context(), period)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "failed to load Graphite overview", err.Error(), "graphite_error")
+		return
+	}
+	writeJSON(w, http.StatusOK, overview)
 }
 
-func graphiteOverview(ctx context.Context, period graphitePeriodSpec) model.GraphiteOverview {
+func graphiteOverview(ctx context.Context, period graphitePeriodSpec) (model.GraphiteOverview, error) {
 	sourceURL := graphiteBaseURL()
-	specs := graphiteMetricSpecs()
+	options, err := discoverGraphiteMetricOptions(ctx, sourceURL)
+	if err != nil {
+		return model.GraphiteOverview{}, fmt.Errorf("discover metrics: %w", err)
+	}
+	if len(options) == 0 {
+		return model.GraphiteOverview{}, fmt.Errorf("Graphite did not return any leaf metrics")
+	}
+	if len(options) > 5 {
+		options = options[:5]
+	}
+	metrics := make([]string, 0, len(options))
+	for _, option := range options {
+		metrics = append(metrics, option.Metric)
+	}
+	specs := metricOptionsToSpecs(metrics, options)
 	seriesByMetric, err := fetchGraphiteSeries(ctx, sourceURL, specs, period.Window)
 	if err != nil {
-		return fallbackGraphiteOverview(sourceURL, period, err)
+		return model.GraphiteOverview{}, fmt.Errorf("fetch series: %w", err)
 	}
 
 	cards := make([]model.GraphiteCard, 0, len(specs))
@@ -80,35 +99,7 @@ func graphiteOverview(ctx context.Context, period graphitePeriodSpec) model.Grap
 			"The scene reads the live source through a period window so the story can shift between quick glances and long arcs.",
 			"Longer windows are useful for comedy because the hill, cloud, or rope gets its shape from the trend.",
 		},
-	}
-}
-
-func fallbackGraphiteOverview(sourceURL string, period graphitePeriodSpec, err error) model.GraphiteOverview {
-	specs := graphiteMetricSpecs()
-	seed := []float64{47.2, 61.4, 7.8, 3.9, 0.1}
-	cards := make([]model.GraphiteCard, 0, len(specs))
-	for i, spec := range specs {
-		cards = append(cards, buildFallbackCard(spec, seed[i%len(seed)]))
-	}
-	msg := "demo fallback values"
-	if err != nil {
-		msg = fmt.Sprintf("demo fallback values (%v)", err)
-	}
-	return model.GraphiteOverview{
-		Connected:   false,
-		SourceURL:   sourceURL,
-		SourceLabel: msg,
-		Period:      period.Key,
-		PeriodLabel: period.Label,
-		Window:      period.Window,
-		CapturedAt:  time.Now().UTC(),
-		Cards:       cards,
-		Periods:     graphitePeriodOptions(),
-		Notes: []string{
-			"The Graphite host was unreachable, so the scene falls back to seeded values.",
-			"Switching the period still works even in fallback mode, which is useful for demo continuity.",
-		},
-	}
+	}, nil
 }
 
 func graphiteBaseURL() string {
@@ -134,61 +125,6 @@ func graphitePeriodOptions() []model.GraphitePeriodOption {
 		out = append(out, model.GraphitePeriodOption{Key: period.Key, Label: period.Label, Window: period.Window})
 	}
 	return out
-}
-
-func graphiteMetricSpecs() []graphiteMetricSpec {
-	return []graphiteMetricSpec{
-		{
-			Label:            "CPU active",
-			Metric:           "servers.Console-1.cpu.usage_active",
-			Unit:             "%",
-			Detail:           "Console-1 over the selected period",
-			HigherIsBetter:   false,
-			HealthyThreshold: 55,
-			WarningThreshold: 80,
-			ProgressCap:      100,
-		},
-		{
-			Label:            "Disk used",
-			Metric:           "servers.Console-1.disk.mmcblk0p2.used_percent",
-			Unit:             "%",
-			Detail:           "System volume usage",
-			HigherIsBetter:   false,
-			HealthyThreshold: 70,
-			WarningThreshold: 85,
-			ProgressCap:      100,
-		},
-		{
-			Label:            "Metrics received",
-			Metric:           "stats.statsd.metrics_received",
-			Unit:             "req/s",
-			Detail:           "StatsD ingest activity",
-			HigherIsBetter:   true,
-			HealthyThreshold: 5,
-			WarningThreshold: 2,
-			ProgressCap:      10,
-		},
-		{
-			Label:            "HTTP 200 rate",
-			Metric:           "stats.response.200",
-			Unit:             "req/s",
-			Detail:           "Successful response throughput",
-			HigherIsBetter:   true,
-			HealthyThreshold: 1,
-			WarningThreshold: 0.25,
-			ProgressCap:      10,
-		},
-		{
-			Label:            "HTTP 404 rate",
-			Metric:           "stats.response.404",
-			Unit:             "req/s",
-			Detail:           "Client-side misses and unknown routes",
-			HigherIsBetter:   false,
-			HealthyThreshold: 0.5,
-			WarningThreshold: 1.5,
-			ProgressCap:      5,
-		},
-	}
 }
 
 func fetchGraphiteSeries(ctx context.Context, baseURL string, specs []graphiteMetricSpec, window string) (map[string]graphiteSeries, error) {
@@ -256,28 +192,6 @@ func buildGraphiteCard(spec graphiteMetricSpec, series graphiteSeries, live bool
 		Progress:     progress,
 		Live:         live,
 		Points:       samples,
-	}
-}
-
-func buildFallbackCard(spec graphiteMetricSpec, value float64) model.GraphiteCard {
-	status := graphiteStatus(spec, value)
-	progress := int((value / spec.ProgressCap) * 100)
-	if progress < 0 {
-		progress = 0
-	}
-	if progress > 100 {
-		progress = 100
-	}
-	return model.GraphiteCard{
-		Label:        spec.Label,
-		Metric:       spec.Metric,
-		ValueDisplay: formatGraphiteValue(spec.Unit, value),
-		DeltaDisplay: "demo seed",
-		Detail:       fmt.Sprintf("%s · seeded fallback", spec.Detail),
-		Status:       status,
-		Progress:     progress,
-		Live:         false,
-		Points:       []float64{value},
 	}
 }
 

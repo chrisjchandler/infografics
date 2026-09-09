@@ -1,6 +1,11 @@
 package app
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"reflect"
 	"testing"
 	"time"
 
@@ -76,16 +81,71 @@ func TestNormalizeSelectedMetricsHonorsPresetSlots(t *testing.T) {
 	}
 }
 
-func TestFallbackGraphiteSeriesIsDeterministic(t *testing.T) {
+func TestDiscoverGraphiteMetricOptionsTraversesEveryBranch(t *testing.T) {
 	t.Parallel()
 
-	specs := []graphiteMetricSpec{{Metric: "demo.metric"}}
-	first := fallbackGraphiteSeries(specs)["demo.metric"]
-	second := fallbackGraphiteSeries(specs)["demo.metric"]
-	if len(first.Datapoints) != 9 || len(second.Datapoints) != 9 {
-		t.Fatalf("unexpected fallback lengths: %d and %d", len(first.Datapoints), len(second.Datapoints))
+	responses := map[string][]graphiteTreeItem{
+		"*":                           {{ID: "servers", AllowChildren: 1}, {ID: "stats", Expandable: 1}},
+		"servers.*":                   {{ID: "servers.Console-1", AllowChildren: 1}, {ID: "servers.Console-2", AllowChildren: 1}},
+		"stats.*":                     {{ID: "stats.response", AllowChildren: 1}},
+		"servers.Console-1.*":         {{ID: "servers.Console-1.cpu", AllowChildren: 1}},
+		"servers.Console-2.*":         {{ID: "servers.Console-2.network", AllowChildren: 1}},
+		"stats.response.*":            {{ID: "stats.response.200", Leaf: 1}},
+		"servers.Console-1.cpu.*":     {{ID: "servers.Console-1.cpu.usage_active", Leaf: 1}},
+		"servers.Console-2.network.*": {{ID: "servers.Console-2.network.eth0", AllowChildren: 1}},
+		"servers.Console-2.network.eth0.*": {
+			{ID: "servers.Console-2.network.eth0.bytes_received", Leaf: 1},
+		},
 	}
-	if first.Datapoints[4][0] != second.Datapoints[4][0] || first.Datapoints[4][1] != second.Datapoints[4][1] {
-		t.Fatalf("fallback changed between calls: %#v %#v", first, second)
+	requested := []string{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query, _ := url.QueryUnescape(r.URL.Query().Get("query"))
+		requested = append(requested, query)
+		if err := json.NewEncoder(w).Encode(responses[query]); err != nil {
+			t.Errorf("encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	options, err := discoverGraphiteMetricOptions(t.Context(), server.URL)
+	if err != nil {
+		t.Fatalf("discover metrics: %v", err)
 	}
+	got := make([]string, 0, len(options))
+	for _, option := range options {
+		got = append(got, option.Metric)
+	}
+	want := []string{"stats.response.200", "servers.Console-2.network.eth0.bytes_received", "servers.Console-1.cpu.usage_active"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("metrics = %#v, want %#v", got, want)
+	}
+	if !containsString(requested, "servers.Console-2.network.eth0.*") {
+		t.Fatalf("network branch was not traversed; queries: %#v", requested)
+	}
+}
+
+func TestGraphiteMetricOptionIncludesNamespaceForManualMetric(t *testing.T) {
+	t.Parallel()
+	option := graphiteMetricOption("servers.Console-2.network.eth0.bytes_received")
+	if option.Namespace != "servers.Console-2.network.eth0" {
+		t.Fatalf("namespace = %q", option.Namespace)
+	}
+}
+
+func TestNormalizeSelectedMetricsDoesNotFillManualSelection(t *testing.T) {
+	t.Parallel()
+	available := []model.GraphiteMetricOption{{Metric: "catalog.a"}, {Metric: "catalog.b"}}
+	got := normalizeSelectedMetrics([]string{"manual.network.bytes"}, graphitePresetFor("sisyphus"), available)
+	if !reflect.DeepEqual(got, []string{"manual.network.bytes"}) {
+		t.Fatalf("manual selection changed: %#v", got)
+	}
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }

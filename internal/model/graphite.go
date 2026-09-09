@@ -11,6 +11,7 @@ type SourceConnectorOption struct {
 
 type GraphiteMetricOption struct {
 	Metric             string `json:"metric"`
+	Namespace          string `json:"namespace"`
 	Label              string `json:"label"`
 	Unit               string `json:"unit"`
 	PreferredDirection string `json:"preferred_direction"`

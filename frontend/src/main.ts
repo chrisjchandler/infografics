@@ -57,8 +57,8 @@ const scenes: SceneTemplate[] = [
     noteSmall: 'We turn 200s, ingest volume, and error drift into a hill that a human can read in one glance.',
     joke: 'Sisyphus would absolutely label the axes.',
     art: 'hill',
-    focusMetric: 'stats.response.200',
-    metricOrder: ['stats.response.200', 'stats.statsd.metrics_received', 'stats.response.404', 'servers.Console-1.cpu.usage_active', 'servers.Console-1.disk.mmcblk0p2.used_percent'],
+    focusMetric: '',
+    metricOrder: [],
     beats: [
       ['Observe', 'Growth is the hill.'],
       ['Normalize', 'Throughput becomes a climb.'],
@@ -77,8 +77,8 @@ const scenes: SceneTemplate[] = [
     noteSmall: 'A 404 spike becomes rain, while the 200s clear the sky. It is hard to ignore weather when it is drawn like weather.',
     joke: 'The cloud is not angry. It is just failing loudly.',
     art: 'storm',
-    focusMetric: 'stats.response.404',
-    metricOrder: ['stats.response.404', 'stats.response.200', 'servers.Console-1.cpu.usage_active', 'stats.statsd.metrics_received', 'servers.Console-1.disk.mmcblk0p2.used_percent'],
+    focusMetric: '',
+    metricOrder: [],
     beats: [
       ['Observe', 'Errors show up as rain.'],
       ['Normalize', 'Mistakes get a forecast.'],
@@ -97,8 +97,8 @@ const scenes: SceneTemplate[] = [
     noteSmall: 'Operational metrics become a tightrope act: if the rope sags, you know where to look.',
     joke: 'The trapeze act is powered by cache misses.',
     art: 'rope',
-    focusMetric: 'servers.Console-1.cpu.usage_active',
-    metricOrder: ['servers.Console-1.cpu.usage_active', 'servers.Console-1.disk.mmcblk0p2.used_percent', 'stats.statsd.metrics_received', 'stats.response.200', 'stats.response.404'],
+    focusMetric: '',
+    metricOrder: [],
     beats: [
       ['Observe', 'Load becomes a balancing act.'],
       ['Normalize', 'CPU and disk share the rope.'],
@@ -305,7 +305,7 @@ function renderSceneArt(scene: SceneTemplate, cards: GraphiteCard[], overview: G
         <text x="562" y="320" fill="#94a3b8" font-size="16">${note}</text>
         <rect x="88" y="44" width="260" height="68" rx="16" fill="rgba(15,23,42,0.9)" stroke="rgba(34,211,238,0.25)" />
         <text x="108" y="73" fill="#22d3ee" font-size="16" font-weight="800">${scene.title}</text>
-        <text x="108" y="96" fill="#94a3b8" font-size="12">${period.label} · ${overview?.connected ? 'live Graphite' : 'fallback'}</text>
+        <text x="108" y="96" fill="#94a3b8" font-size="12">${period.label} · ${overview?.connected ? 'live Graphite' : 'source unavailable'}</text>
         <rect x="88" y="340" width="370" height="48" rx="14" fill="rgba(15,23,42,0.88)" stroke="rgba(148,163,184,0.18)" />
         <text x="108" y="370" fill="#e5eefb" font-size="14" font-weight="700">${support.label}: ${support.value_display} — ${support.delta_display}</text>
       </svg>
@@ -355,7 +355,7 @@ function renderSceneArt(scene: SceneTemplate, cards: GraphiteCard[], overview: G
       <text x="566" y="304" fill="#94a3b8" font-size="16">${note}</text>
       <rect x="96" y="52" width="280" height="74" rx="16" fill="rgba(15,23,42,0.92)" stroke="rgba(34,211,238,0.28)" />
       <text x="116" y="84" fill="#22d3ee" font-size="16" font-weight="800">${scene.title}</text>
-      <text x="116" y="108" fill="#94a3b8" font-size="12">${period.label} · ${overview?.connected ? 'live Graphite' : 'fallback'}</text>
+      <text x="116" y="108" fill="#94a3b8" font-size="12">${period.label} · ${overview?.connected ? 'live Graphite' : 'source unavailable'}</text>
       <rect x="82" y="340" width="380" height="42" rx="14" fill="rgba(15,23,42,0.88)" stroke="rgba(148,163,184,0.18)" />
       <text x="104" y="367" fill="#e5eefb" font-size="14" font-weight="700">${support.label}: ${support.value_display} — ${support.delta_display}</text>
       <path d="${trail}" fill="none" stroke="${accent}" stroke-width="3" opacity="0.38" />
@@ -433,7 +433,7 @@ async function loadOverview(): Promise<void> {
   state.loading = true;
   byId<HTMLDivElement>('source-pill').textContent = 'Loading infographic…';
   try {
-    const response = await fetch(`/api/v1/demo/graphite?period=${encodeURIComponent(state.period)}`);
+    const response = await fetch(`/api/v1/sources/graphite?period=${encodeURIComponent(state.period)}`);
     state.overview = await response.json() as GraphiteOverview;
     if (!state.selectedMetric) {
       state.selectedMetric = selectedScene().focusMetric;
@@ -448,7 +448,7 @@ async function loadOverview(): Promise<void> {
     state.overview = {
       connected: false,
       source_url: 'n/a',
-      source_label: 'demo fallback',
+      source_label: 'source unavailable',
       period: state.period,
       period_label: periodLabels[state.period],
       window: state.period,

@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"infograf/internal/model"
 	"infograf/internal/sources"
@@ -147,6 +146,10 @@ func TestServerAPIFlow(t *testing.T) {
 	if loaded.ID != created.ID || loaded.Name != "Ops tower" {
 		t.Fatalf("unexpected loaded scene: %#v", loaded)
 	}
+	var loadedPayload map[string]int
+	if err := json.Unmarshal(loaded.Payload, &loadedPayload); err != nil || loadedPayload["widgets"] != 2 {
+		t.Fatalf("scene payload did not round trip: %s (%v)", loaded.Payload, err)
+	}
 
 	patchReq := model.SceneDocument{Name: "Ops tower v2", Status: "published"}
 	requestJSON(t, ts.URL+"/api/v1/scenes/"+created.ID, http.MethodPatch, patchReq, &loaded, http.StatusOK)
@@ -158,15 +161,6 @@ func TestServerAPIFlow(t *testing.T) {
 	requestJSON(t, ts.URL+"/api/v1/revisions?entity_type=scene&entity_id="+created.ID, http.MethodGet, nil, &revs, http.StatusOK)
 	if len(revs) < 2 {
 		t.Fatalf("expected revisions, got %#v", revs)
-	}
-
-	var demo model.ReplicationDemoResponse
-	requestJSON(t, ts.URL+"/api/v1/demo/replication?at=2026-08-30T10:22:00Z", http.MethodGet, nil, &demo, http.StatusOK)
-	if demo.Scene.ID == "" || len(demo.State.Objects) == 0 || len(demo.Trace) == 0 {
-		t.Fatalf("unexpected demo payload: %#v", demo)
-	}
-	if demo.State.Timestamp.Format(time.RFC3339) != "2026-08-30T10:22:00Z" {
-		t.Fatalf("unexpected demo timestamp: %s", demo.State.Timestamp.Format(time.RFC3339))
 	}
 
 }
@@ -184,6 +178,9 @@ func TestConfigurationPageExposesSaveWorkflow(t *testing.T) {
 	if res.Code != http.StatusOK {
 		t.Fatalf("index status = %d", res.Code)
 	}
+	if res.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("index cache control = %q", res.Header().Get("Cache-Control"))
+	}
 	html := res.Body.String()
 	configureAt := strings.Index(html, `id="page-configure"`)
 	statusAt := strings.Index(html, `id="config-save-status"`)
@@ -197,10 +194,22 @@ func TestConfigurationPageExposesSaveWorkflow(t *testing.T) {
 		`Save failed`,
 		`beforeunload`,
 		`window.location.hash === "#configure"`,
+		`namespace: ${namespace}`,
+		`/api/v1/sources/graphite/catalog`,
+		`metric.metric.toLowerCase().startsWith(normalizedPrefix)`,
+		`Save as new dashboard`,
+		`await applySceneSelection();`,
+		`metricInput.value = state.selectedMetrics[i - 1] || ""`,
 	} {
 		if !strings.Contains(html, marker) {
 			t.Fatalf("configuration save workflow missing %q", marker)
 		}
+	}
+	stageAt := strings.Index(html, `id="stage-host"`)
+	playbackAt := strings.Index(html, `id="stage-playback"`)
+	graphsAt := strings.Index(html, `id="graph-gallery"`)
+	if stageAt < 0 || playbackAt <= stageAt || graphsAt <= playbackAt {
+		t.Fatalf("playback controls must render below the stage and above graph panels: stage=%d playback=%d graphs=%d", stageAt, playbackAt, graphsAt)
 	}
 }
 
