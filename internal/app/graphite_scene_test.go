@@ -1,16 +1,64 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"reflect"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"infograf/internal/model"
 )
+
+func TestDiscoverGraphiteMetricOptionsPrefersBulkIndex(t *testing.T) {
+	t.Parallel()
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		if r.URL.Path != "/metrics/index.json" {
+			t.Errorf("unexpected fallback request: %s", r.URL.String())
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode([]string{"servers.b.cpu.idle", "servers.a.cpu.used"})
+	}))
+	defer server.Close()
+
+	options, err := discoverGraphiteMetricOptions(t.Context(), server.URL)
+	if err != nil {
+		t.Fatalf("discover metrics: %v", err)
+	}
+	if requests.Load() != 1 || len(options) != 2 {
+		t.Fatalf("requests = %d, options = %#v", requests.Load(), options)
+	}
+}
+
+func TestGraphiteMetricCatalogCachesDiscovery(t *testing.T) {
+	t.Parallel()
+	var requests atomic.Int32
+	graphite := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		_ = json.NewEncoder(w).Encode([]string{"servers.nas.cpu.idle"})
+	}))
+	defer graphite.Close()
+
+	server := &Server{}
+	first, firstStatus, err := server.graphiteMetricOptions(context.Background(), graphite.URL)
+	if err != nil {
+		t.Fatalf("first discovery: %v", err)
+	}
+	second, secondStatus, err := server.graphiteMetricOptions(context.Background(), graphite.URL)
+	if err != nil {
+		t.Fatalf("cached discovery: %v", err)
+	}
+	if requests.Load() != 1 || firstStatus != "miss" || secondStatus != "hit" || !reflect.DeepEqual(first, second) {
+		t.Fatalf("requests=%d statuses=%q/%q first=%#v second=%#v", requests.Load(), firstStatus, secondStatus, first, second)
+	}
+}
 
 func TestTimelineProgressSeries(t *testing.T) {
 	t.Parallel()

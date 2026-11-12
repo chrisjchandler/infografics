@@ -859,11 +859,17 @@
       }
     }
 
+    const metricSuggestionLimit = 100;
+
     function renderMetricOptions(prefix = "") {
       const normalizedPrefix = String(prefix).trim().toLowerCase();
-      const metrics = normalizedPrefix
-        ? state.catalog.metrics.filter((metric) => metric.metric.toLowerCase().startsWith(normalizedPrefix))
-        : state.catalog.metrics;
+      const metrics = [];
+      for (const metric of state.catalog.metrics) {
+        if (!normalizedPrefix || metric.metric.toLowerCase().startsWith(normalizedPrefix)) {
+          metrics.push(metric);
+          if (metrics.length === metricSuggestionLimit) break;
+        }
+      }
       $("metric-options").innerHTML = metrics.map((metric) => `<option value="${safe(metric.metric)}" label="${safe(metric.namespace ? `${metric.namespace} · ${metric.label}` : metric.label)}"></option>`).join("");
     }
 

@@ -7,11 +7,29 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"infograf/internal/model"
 	"infograf/internal/scenes"
 )
+
+const (
+	graphiteMetricCatalogTTL       = 5 * time.Minute
+	graphiteMetricCatalogRetryWait = 30 * time.Second
+	graphiteMetricRefreshTimeout   = 30 * time.Second
+)
+
+type graphiteMetricCatalogCache struct {
+	mu          sync.Mutex
+	sourceURL   string
+	metrics     []model.GraphiteMetricOption
+	fetchedAt   time.Time
+	nextRefresh time.Time
+	lastErr     error
+	refreshing  bool
+	ready       chan struct{}
+}
 
 type graphiteTreeItem struct {
 	ID            string `json:"id"`
@@ -35,7 +53,9 @@ var graphiteScenePresets = []graphiteScenePreset{
 }
 
 func (s *Server) handleGraphiteCatalog(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, graphiteCatalog(r.Context()))
+	catalog, cacheStatus := s.graphiteCatalog(r.Context())
+	w.Header().Set("X-Infograf-Metric-Catalog", cacheStatus)
+	writeJSON(w, http.StatusOK, catalog)
 }
 
 func (s *Server) handleGraphiteScene(w http.ResponseWriter, r *http.Request) {
@@ -47,17 +67,18 @@ func (s *Server) handleGraphiteScene(w http.ResponseWriter, r *http.Request) {
 	}
 	metrics := selectedGraphiteMetrics(r)
 	preset := graphitePresetFor(strings.TrimSpace(r.URL.Query().Get("preset")))
-	resp, err := graphiteScene(r.Context(), preset, period, metrics, at)
+	resp, cacheStatus, err := s.graphiteScene(r.Context(), preset, period, metrics, at)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "failed to build live Graphite scene", err.Error(), "graphite_error")
 		return
 	}
+	w.Header().Set("X-Infograf-Metric-Catalog", cacheStatus)
 	writeJSON(w, http.StatusOK, resp)
 }
 
-func graphiteCatalog(ctx context.Context) model.GraphiteCatalogResponse {
+func (s *Server) graphiteCatalog(ctx context.Context) (model.GraphiteCatalogResponse, string) {
 	sourceURL := graphiteBaseURL()
-	metrics, err := discoverGraphiteMetricOptions(ctx, sourceURL)
+	metrics, cacheStatus, err := s.graphiteMetricOptions(ctx, sourceURL)
 	connected := err == nil
 	sourceLabel := "live Graphite"
 	if err != nil {
@@ -74,34 +95,34 @@ func graphiteCatalog(ctx context.Context) model.GraphiteCatalogResponse {
 		Periods:     graphitePeriodOptions(),
 		Presets:     graphiteScenePresetOptions(),
 		Connectors:  connectorOptions(),
-	}
+	}, cacheStatus
 }
 
-func graphiteScene(ctx context.Context, preset graphiteScenePreset, period graphitePeriodSpec, selected []string, at *time.Time) (model.GraphiteSceneResponse, error) {
+func (s *Server) graphiteScene(ctx context.Context, preset graphiteScenePreset, period graphitePeriodSpec, selected []string, at *time.Time) (model.GraphiteSceneResponse, string, error) {
 	sourceURL := graphiteBaseURL()
-	availableMetrics, discoverErr := discoverGraphiteMetricOptions(ctx, sourceURL)
+	availableMetrics, cacheStatus, discoverErr := s.graphiteMetricOptions(ctx, sourceURL)
 	if discoverErr != nil && len(selected) == 0 {
-		return model.GraphiteSceneResponse{}, fmt.Errorf("discover Graphite metrics: %w", discoverErr)
+		return model.GraphiteSceneResponse{}, cacheStatus, fmt.Errorf("discover Graphite metrics: %w", discoverErr)
 	}
 	selected = normalizeSelectedMetrics(selected, preset, availableMetrics)
 	if len(selected) == 0 {
-		return model.GraphiteSceneResponse{}, fmt.Errorf("Graphite did not return any leaf metrics")
+		return model.GraphiteSceneResponse{}, cacheStatus, fmt.Errorf("Graphite did not return any leaf metrics")
 	}
 	specs := metricOptionsToSpecs(selected, availableMetrics)
 
 	seriesByMetric, err := fetchGraphiteSeries(ctx, sourceURL, specs, period.Window)
 	if err != nil {
-		return model.GraphiteSceneResponse{}, fmt.Errorf("fetch Graphite series: %w", err)
+		return model.GraphiteSceneResponse{}, cacheStatus, fmt.Errorf("fetch Graphite series: %w", err)
 	}
 	if graphiteSeriesSetIncomplete(seriesByMetric, specs) {
-		return model.GraphiteSceneResponse{}, fmt.Errorf("Graphite returned no datapoints for one or more selected metrics")
+		return model.GraphiteSceneResponse{}, cacheStatus, fmt.Errorf("Graphite returned no datapoints for one or more selected metrics")
 	}
 
 	canonicalSeries := make([]model.CanonicalSeries, 0, len(specs)+1)
 	for _, spec := range specs {
 		series := graphiteSeriesToCanonical(spec, seriesByMetric[spec.Metric], sourceURL)
 		if len(series.Points) == 0 {
-			return model.GraphiteSceneResponse{}, fmt.Errorf("Graphite metric %q has no numeric datapoints", spec.Metric)
+			return model.GraphiteSceneResponse{}, cacheStatus, fmt.Errorf("Graphite metric %q has no numeric datapoints", spec.Metric)
 		}
 		canonicalSeries = append(canonicalSeries, series)
 	}
@@ -117,14 +138,14 @@ func graphiteScene(ctx context.Context, preset graphiteScenePreset, period graph
 	sceneDef := graphiteSceneDefinition(preset, canonicalSeries)
 	sceneState, err := scenes.EvaluateScene(sceneDef, canonicalSeries, graphiteAnnotationsAsEvents(primary), at.UTC())
 	if err != nil {
-		return model.GraphiteSceneResponse{}, err
+		return model.GraphiteSceneResponse{}, cacheStatus, err
 	}
 	frames := make([]model.SceneState, 0, len(primary.Points))
 	events := graphiteAnnotationsAsEvents(primary)
 	for _, point := range primary.Points {
 		frameState, err := scenes.EvaluateScene(sceneDef, canonicalSeries, events, point.Timestamp)
 		if err != nil {
-			return model.GraphiteSceneResponse{}, err
+			return model.GraphiteSceneResponse{}, cacheStatus, err
 		}
 		frames = append(frames, frameState)
 	}
@@ -147,7 +168,94 @@ func graphiteScene(ctx context.Context, preset graphiteScenePreset, period graph
 		State:            sceneState,
 		Frames:           frames,
 		Series:           canonicalSeries[:len(canonicalSeries)-1],
-	}, nil
+	}, cacheStatus, nil
+}
+
+func (s *Server) graphiteMetricOptions(ctx context.Context, sourceURL string) ([]model.GraphiteMetricOption, string, error) {
+	cache := &s.graphiteMetricCatalog
+	for {
+		now := time.Now()
+		cache.mu.Lock()
+		if cache.sourceURL != sourceURL {
+			cache.sourceURL = sourceURL
+			cache.metrics = nil
+			cache.fetchedAt = time.Time{}
+			cache.nextRefresh = time.Time{}
+			cache.lastErr = nil
+		}
+		if len(cache.metrics) > 0 && now.Sub(cache.fetchedAt) < graphiteMetricCatalogTTL {
+			metrics := cloneGraphiteMetricOptions(cache.metrics)
+			cache.mu.Unlock()
+			return metrics, "hit", nil
+		}
+		if len(cache.metrics) > 0 {
+			metrics := cloneGraphiteMetricOptions(cache.metrics)
+			if !cache.refreshing && !now.Before(cache.nextRefresh) {
+				cache.refreshing = true
+				cache.ready = make(chan struct{})
+				go s.refreshGraphiteMetricOptions(sourceURL)
+			}
+			cache.mu.Unlock()
+			return metrics, "stale", nil
+		}
+		if cache.refreshing {
+			ready := cache.ready
+			cache.mu.Unlock()
+			select {
+			case <-ctx.Done():
+				return nil, "miss", ctx.Err()
+			case <-ready:
+				continue
+			}
+		}
+		if cache.lastErr != nil && now.Before(cache.nextRefresh) {
+			err := cache.lastErr
+			cache.mu.Unlock()
+			return nil, "error", err
+		}
+		cache.refreshing = true
+		cache.ready = make(chan struct{})
+		cache.mu.Unlock()
+
+		metrics, err := discoverGraphiteMetricOptions(ctx, sourceURL)
+		s.finishGraphiteMetricRefresh(sourceURL, metrics, err)
+		if err != nil {
+			return nil, "miss", err
+		}
+		return cloneGraphiteMetricOptions(metrics), "miss", nil
+	}
+}
+
+func (s *Server) refreshGraphiteMetricOptions(sourceURL string) {
+	ctx, cancel := context.WithTimeout(context.Background(), graphiteMetricRefreshTimeout)
+	defer cancel()
+	metrics, err := discoverGraphiteMetricOptions(ctx, sourceURL)
+	s.finishGraphiteMetricRefresh(sourceURL, metrics, err)
+}
+
+func (s *Server) finishGraphiteMetricRefresh(sourceURL string, metrics []model.GraphiteMetricOption, err error) {
+	cache := &s.graphiteMetricCatalog
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
+	if cache.sourceURL == sourceURL {
+		cache.lastErr = err
+		if err == nil {
+			cache.metrics = cloneGraphiteMetricOptions(metrics)
+			cache.fetchedAt = time.Now()
+			cache.nextRefresh = cache.fetchedAt.Add(graphiteMetricCatalogTTL)
+		} else {
+			cache.nextRefresh = time.Now().Add(graphiteMetricCatalogRetryWait)
+		}
+	}
+	cache.refreshing = false
+	if cache.ready != nil {
+		close(cache.ready)
+		cache.ready = nil
+	}
+}
+
+func cloneGraphiteMetricOptions(metrics []model.GraphiteMetricOption) []model.GraphiteMetricOption {
+	return append([]model.GraphiteMetricOption(nil), metrics...)
 }
 
 func graphiteSeriesSetIncomplete(series map[string]graphiteSeries, specs []graphiteMetricSpec) bool {
@@ -205,6 +313,21 @@ func connectorOptions() []model.SourceConnectorOption {
 }
 
 func discoverGraphiteMetricOptions(ctx context.Context, sourceURL string) ([]model.GraphiteMetricOption, error) {
+	if metrics, err := fetchGraphiteMetricIndex(ctx, sourceURL); err == nil && len(metrics) > 0 {
+		out := make([]model.GraphiteMetricOption, 0, len(metrics))
+		seen := make(map[string]bool, len(metrics))
+		for _, metric := range metrics {
+			metric = strings.TrimSpace(metric)
+			if metric == "" || seen[metric] {
+				continue
+			}
+			seen[metric] = true
+			out = append(out, graphiteMetricOption(metric))
+		}
+		sort.Slice(out, func(i, j int) bool { return out[i].Label < out[j].Label })
+		return out, nil
+	}
+
 	queries := []string{"*"}
 	visited := map[string]bool{}
 	seen := map[string]model.GraphiteMetricOption{}
@@ -240,6 +363,27 @@ func discoverGraphiteMetricOptions(ctx context.Context, sourceURL string) ([]mod
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Label < out[j].Label })
 	return out, nil
+}
+
+func fetchGraphiteMetricIndex(ctx context.Context, sourceURL string) ([]string, error) {
+	path := fmt.Sprintf("%s/metrics/index.json", sourceURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := graphiteHTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("graphite metric index returned %s", resp.Status)
+	}
+	var metrics []string
+	if err := decodeJSON(resp.Body, &metrics); err != nil {
+		return nil, err
+	}
+	return metrics, nil
 }
 
 func fetchGraphiteMetricTree(ctx context.Context, sourceURL, query string) ([]graphiteTreeItem, error) {

@@ -27,9 +27,10 @@ type Options struct {
 }
 
 type Server struct {
-	started time.Time
-	mux     *http.ServeMux
-	store   store.Store
+	started               time.Time
+	mux                   *http.ServeMux
+	store                 store.Store
+	graphiteMetricCatalog graphiteMetricCatalogCache
 }
 
 func New(opts Options) (*Server, error) {

@@ -197,6 +197,7 @@ func TestConfigurationPageExposesSaveWorkflow(t *testing.T) {
 		`namespace: ${namespace}`,
 		`/api/v1/sources/graphite/catalog`,
 		`metric.metric.toLowerCase().startsWith(normalizedPrefix)`,
+		`metricSuggestionLimit = 100`,
 		`Save as new dashboard`,
 		`await applySceneSelection();`,
 		`metricInput.value = state.selectedMetrics[i - 1] || ""`,
