@@ -6,9 +6,9 @@ Infografics turns timestamped telemetry into deterministic animated infographics
 
 ## Screenshots
 
-| Studio playback | Canonical scene state |
-| --- | --- |
-| [Open full-size screenshot](docs/screenshots/studio-infografics.png) | [Open full-size screenshot](docs/screenshots/studio-canonical-state.png) |
+| Studio playback | Canonical scene state | AI metric analysis |
+| --- | --- | --- |
+| [Open full-size screenshot](docs/screenshots/studio-infografics.png) | [Open full-size screenshot](docs/screenshots/studio-canonical-state.png) | [View AI analysis screenshots](#ai-metric-analysis) |
 
 The screenshots are committed under `docs/screenshots/` so they render offline in repository browsers.
 
@@ -74,7 +74,7 @@ INFOGRAF_ADDR=127.0.0.1:8080 \
 go run ./cmd/infograf
 ```
 
-The Studio traverses the Graphite metric tree from its root, accepts up to six metrics, and replays source timestamps. Unavailable sources and empty or partial targets are reported as errors; production responses never substitute fixture values.
+The Studio prefetches Graphite's bulk metric index when available, falls back to full tree traversal for compatible older deployments, and keeps a five-minute stale-while-refresh catalog in memory. Metric suggestions are filtered locally, while scenes accept up to six metrics and replay source timestamps. Unavailable sources and empty or partial targets are reported as errors; production responses never substitute fixture values.
 
 ### Canonical adapter API
 
@@ -158,6 +158,16 @@ Select both host metrics in one dashboard to compare them over the same playback
 The animated stage uses the primary metric for character motion. The graph gallery renders every selected series with its own unit, value scale, time axis, and synchronized playback cursor, avoiding misleading mixed-unit overlays.
 
 ### AI metric analysis
+
+Analyze a metric directly from the animated stage or its graph panel. These screenshots show live Graphite memory-availability data and a real response from Ollama running `qwen2.5:7b`.
+
+![Infografics Studio showing the Icarus memory-availability scene, synchronized annotations, and a completed Ollama analysis](docs/screenshots/ai-analysis-studio.png)
+
+The graph panel keeps the timestamped samples and numeric scale alongside the model's analysis of the most recent sample window.
+
+![Memory-availability graph with exact time and value axes and the completed Ollama analysis below it](docs/screenshots/ai-analysis-result.png)
+
+[View the application while analysis is in progress](docs/screenshots/ai-analysis-in-progress.png).
 
 Each graph has an **Analyze with AI** action. The backend sends a bounded sample window to an Ollama-compatible `/api/generate` endpoint when `INFOGRAF_AI_URL` is configured:
 
