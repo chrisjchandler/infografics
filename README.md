@@ -2,7 +2,7 @@
 
 Infografics turns timestamped telemetry into deterministic animated infographics. Time, value, trend, and events are normalized first, then mapped to charts, characters, paths, scale, altitude, rotation, and other explicit scene properties.
 
-![Infografics Studio](docs/screenshots/studio-infografics.png)
+![Infografics Studio performing AI analysis of live memory-availability data with Ollama](docs/screenshots/ai-analysis-studio.png)
 
 ## Screenshots
 
